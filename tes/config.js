@@ -4,6 +4,8 @@ window.GRANDON_CONFIG = {
   NON: "Bwat Sekrèm",
   LOGO: "../logo-blan.png",
   LOGO_IKON: "../ikon-blan.png",
+  LOGO_KOULE: "../logo-koule.png",
+  LOGO_IKON_KOULE: "../ikon-koule.png",
   ANVIWONMAN: "TÈS",
   SUPABASE_URL: "https://riutfmqffpffniutbhue.supabase.co",
   SUPABASE_KEY: "sb_publishable_p8aTqDgmHm7XvpkEjk7LiQ_X5QgwbfZ",

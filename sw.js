@@ -1,12 +1,12 @@
 // Service worker: kenbe aplikasyon an sou telefòn nan pou l louvri san entènèt.
 // Chanje VERSION chak fwa ou pibliye yon nouvo vèsyon.
 const CFG = self.GRANDON_SW || { baz: "", lokal: null, non: "prod" };
-const VERSION = `grandon-ajan-v64-${CFG.non}`;
+const VERSION = `grandon-ajan-v65-${CFG.non}`;
 const SHELL_BAZ = [
   "./", "index.html", "app.css", "look-a.css", "look-b.css", "look-c.css",
   "app.js", "db.js", "api.js", "sync.js", "config.js", "ui.js", "i18n.js", "taxonomy.js", "fmt.js",
   "looks.js", "pwoblem.js", "look-base.js", "look-a.js", "look-b.js", "look-c.js", "kat.js",
-  "mak.css", "logo.png", "logo-blan.png", "ikon-blan.png", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/leaflet/images/layers.png", "vendor/leaflet/images/layers-2x.png",
+  "mak.css", "logo.png", "logo-blan.png", "ikon-blan.png", "logo-koule.png", "ikon-koule.png", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/leaflet/images/layers.png", "vendor/leaflet/images/layers-2x.png",
   "vendor/leaflet/images/marker-icon.png", "vendor/leaflet/images/marker-icon-2x.png", "vendor/leaflet/images/marker-shadow.png",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
 ];
