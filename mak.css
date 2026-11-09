@@ -1,0 +1,21 @@
+/* Mak Bwat Sekrèm (sit Epargne): ble marin #094368 + vèt #63b32e, sou tout look yo. */
+html[data-mak="bs"][data-look]:not([data-theme="dark"]) {
+  --pri: #094368; --pri-2: #06304b; --lnk: #094368; --hd: #094368; --navy: #094368; --radio: #094368; --ring: #094368;
+  --acc: #63b32e; --acc-ink: #fff; --gold: #63b32e; --gold-ink: #fff; --gold-l: #a7d98a; --gold-soft: #eaf6e1; --gold-bg: #eaf6e1;
+  --band: #094368; --nav: #094368; --halo: rgba(99, 179, 46, .35);
+  --sh: 0 10px 30px rgba(9, 67, 104, .12); --sh-b: 0 6px 16px rgba(9, 67, 104, .18);
+}
+html[data-mak="bs"][data-look][data-theme="dark"] {
+  --pri: #2f86b8; --pri-2: #3a96cb; --lnk: #8fd0f5; --navy: #094368;
+  --acc: #74c740; --acc-ink: #06210f; --gold: #74c740; --gold-ink: #06210f; --gold-l: #a7d98a; --gold-soft: rgba(116, 199, 64, .16); --gold-bg: rgba(116, 199, 64, .14);
+  --band: #062a42; --nav: #062a42; --halo: rgba(116, 199, 64, .4); --radio: #74c740; --ring: #74c740;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-mak="bs"][data-look]:not([data-theme="light"]):not([data-theme="dark"]) {
+    --pri: #2f86b8; --pri-2: #3a96cb; --lnk: #8fd0f5;
+    --acc: #74c740; --acc-ink: #06210f; --gold: #74c740; --gold-ink: #06210f; --gold-soft: rgba(116, 199, 64, .16);
+    --band: #062a42; --nav: #062a42; --radio: #74c740; --ring: #74c740;
+  }
+}
+/* Non mak la an lèt san-serif gra, tankou logo Bwat Sekrèm */
+html[data-mak="bs"] .wordmark, html[data-mak="bs"][data-look] .brand .wordmark { font-family: "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif; font-weight: 800; letter-spacing: 0; }
