@@ -2,8 +2,8 @@
 window.GRANDON_CONFIG = {
   SEVIS: "epargne",
   NON: "Bwat Sekrèm",
-  LOGO: "../logo.png",
-  LOGO_IKON: "../icons/icon-192.png",
+  LOGO: "../logo-blan.png",
+  LOGO_IKON: "../ikon-blan.png",
   ANVIWONMAN: "TÈS",
   SUPABASE_URL: "https://riutfmqffpffniutbhue.supabase.co",
   SUPABASE_KEY: "sb_publishable_p8aTqDgmHm7XvpkEjk7LiQ_X5QgwbfZ",
