@@ -1,4 +1,4 @@
-// Konfigirasyon TÈS (baz tès). Menm aplikasyon an (fichye yo nan ../), men done tès sèlman.
+// Konfigirasyon TÈS (baz tès). Kòd tès la nan app/ (separe ak prodiksyon), done tès sèlman.
 window.GRANDON_CONFIG = {
   SEVIS: "epargne",
   NON: "Bwat Sekrèm",
@@ -10,7 +10,7 @@ window.GRANDON_CONFIG = {
   SUPABASE_URL: "https://riutfmqffpffniutbhue.supabase.co",
   SUPABASE_KEY: "sb_publishable_p8aTqDgmHm7XvpkEjk7LiQ_X5QgwbfZ",
   DB: "bs-tes",
-  BAZ: "../",
+  BAZ: "app/",
   DOMEN_AJAN: "ajan.grandon.invalid",
   BUCKET_FOTO: "bso",
   DOSYE_FOTO: "photo_client",
