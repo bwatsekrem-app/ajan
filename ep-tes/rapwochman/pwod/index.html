@@ -32,6 +32,7 @@ button:disabled{opacity:.5;cursor:default}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:6px 8px;border-bottom:1px solid var(--li);text-align:right;white-space:nowrap}
 th{background:var(--th);font-weight:600;position:sticky;top:0}
+th.imp,td.imp{background:var(--okb);font-weight:700}
 th:first-child,td:first-child{text-align:left}
 tr.tot td{font-weight:700;border-top:2px solid var(--li)}
 tr.klik{cursor:pointer}tr.klik:hover td{background:var(--th)}
@@ -81,7 +82,6 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
         <label>Soti<input type="date" id="deb"></label>
         <label>Rive<input type="date" id="fen"></label>
         <button data-p="jodi">Jodi a</button><button data-p="yè">Yè</button><button data-p="sem">7 jou</button><button data-p="mwa">Mwa sa a</button>
-        <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="atant" checked>Konte depo an atant (poko valide)</label>
         <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="gwoupe" checked>Mete A1-/Succu- ansanm ak ajan an</label>
         <button class="pri" id="chaje">Chaje</button>
       </div>
@@ -248,7 +248,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   }
   function kalkile() {
     const D = st.done; if (!D) return null;
-    const atant = $("atant").checked;
+    const atant = true;
     // A[jou][kolektè][rub] = {s, sa, i, ni, d}
     const A = {};
     const cel = (j, k, r) => (((A[j] = A[j] || {})[k] = A[j][k] || {})[r] = A[j][k][r] || { s: 0, sa: 0, ns: 0, i: 0, ni: 0, d: 0, nd: 0 });
@@ -282,7 +282,9 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     }
     return { A, meta, um, sbKolekte, atant, jous: Object.keys(st.imp).sort() };
   }
-  const sbV = (c, atant) => c.s + (atant ? c.sa : 0);
+  // Data Importe = Supabase valide + Supabase an atant + Importation Globale ; se li ki konpare ak Declaration Agent
+  const imp = (c) => c.s + c.sa + c.i;
+  const doub = (c) => (c.s || c.sa) && c.i; // menm ajan, menm jou, menm rubrik nan 2 sous yo
   function sòm(list) {
     const o = { s: 0, sa: 0, ns: 0, i: 0, ni: 0, d: 0, nd: 0 };
     for (const c of list) if (c) for (const k in o) o[k] += c[k] || 0;
@@ -290,8 +292,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   }
 
   // ---------- Afichaj ----------
-  function ekarCel(a, b, konpare = true) {
-    if (!konpare || a === null || b === null) return `<td class="na">—</td>`;
+  function ekarCel(a, b) {
     const d = Math.round(a - b);
     return d === 0 ? `<td class="okc">0</td>` : `<td class="ekar">${d > 0 ? "+" : ""}${nf(d)}</td>`;
   }
@@ -302,37 +303,33 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     st.K = K;
     ({ jeneral: vJeneral, ajan: vAjan, jou: vJou, koresp: vKoresp })[st.tab](K);
   }
-  function antet(sbOk = true) {
-    return `<tr><th></th><th title="Tranzaksyon valide (Kès)">Supabase valide</th><th title="Depo poko valide pa Kès">Supabase an atant</th>
-      <th>Importation Globale</th><th>Declaration Agent</th><th title="Supabase − Importation">Ekar Supabase − Importation</th>
-      <th title="Importation − Declaration">Ekar Importation − Declaration</th></tr>`;
+  function antet(prem = "") {
+    return `<tr><th>${prem}</th><th title="Tranzaksyon Kès valide sou Supabase">Supabase valide</th><th title="Depo sou Supabase Kès poko valide">Supabase an atant</th>
+      <th>Importation Globale</th><th class="imp" title="Supabase valide + Supabase an atant + Importation Globale">Data Importe</th>
+      <th>Declaration Agent</th><th title="Data Importe − Declaration Agent">Ekar</th></tr>`;
   }
-  function liy(lab, c, sbKonpare, atr = "") {
-    const s = sbKonpare ? sbV(c, st.K.atant) : null;
-    return `<tr ${atr}><td>${lab}</td><td>${sbKonpare ? nf(c.s) : '<span class="na">—</span>'}</td><td>${sbKonpare ? nf(c.sa) : '<span class="na">—</span>'}</td>
-      <td>${nf(c.i)}</td><td>${nf(c.d)}</td>${ekarCel(s, c.i, sbKonpare)}${ekarCel(c.i, c.d)}</tr>`;
+  function liy(lab, c, r, atr = "") {
+    const sbOk = RUB_SB.has(r);
+    return `<tr ${atr}><td>${lab}</td><td>${sbOk ? nf(c.s) : '<span class="na">—</span>'}</td><td>${sbOk ? nf(c.sa) : '<span class="na">—</span>'}</td>
+      <td>${nf(c.i)}</td><td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ekarCel(imp(c), c.d)}</tr>`;
+  }
+  // Pou chak kolektè : kantite (jou × rubrik) kote li parèt nan Supabase AK nan Importation (posib doub)
+  function doubAjan(K, k, r) {
+    let n = 0;
+    for (const j of Object.keys(K.A)) for (const [rr, c] of Object.entries(K.A[j][k] || {})) if ((!r || rr === r) && doub(c)) n++;
+    return n;
   }
   function vJeneral(K) {
-    // Supabase konpare sèlman pou kolektè ki sou app la
     const rows = RUB.map(([r, l]) => {
-      const all = [], sbOnly = [];
-      for (const j of Object.keys(K.A)) for (const [k, rr] of Object.entries(K.A[j])) {
-        if (rr[r]) { all.push(rr[r]); if (K.sbKolekte.has(k)) sbOnly.push(rr[r]); }
-      }
-      const t = sòm(all), ts = sòm(sbOnly);
-      return { r, l, t, ts, vid: !t.s && !t.sa && !t.i && !t.d };
+      const all = [];
+      for (const j of Object.keys(K.A)) for (const rr of Object.values(K.A[j])) if (rr[r]) all.push(rr[r]);
+      const t = sòm(all);
+      return { r, l, t, vid: !t.s && !t.sa && !t.i && !t.d };
     }).filter((x) => !x.vid);
-    const kol = [...K.sbKolekte].sort();
-    let h = `<div class="kat"><h2>Total jeneral · tout ajan</h2><div class="wrap"><table>${antet()}`;
-    for (const x of rows) h += liy(RUB_L[x.r], x.t, false, `class="klik" data-rub="${x.r}"`);
-    h += `</table></div><div class="note">Kolòn Supabase yo vid isit la paske se pa tout ajan ki sou app la. Gade tablo anba a pou ajan ki sou Supabase yo.</div></div>`;
-    h += `<div class="kat"><h2>Ajan ki sou app la (Supabase) · ${kol.map(esc).join(", ") || "okenn"}</h2><div class="wrap"><table>${antet()}`;
-    for (const x of rows) if (RUB_SB.has(x.r) || x.ts.s || x.ts.sa) {
-      const c = {}; const o = sòm([]);
-      for (const j of Object.keys(K.A)) for (const k of kol) { const v = K.A[j][k]?.[x.r]; if (v) for (const z in o) o[z] += v[z] || 0; }
-      h += liy(RUB_L[x.r], o, RUB_SB.has(x.r), `class="klik" data-rub="${x.r}"`);
-    }
-    h += `</table></div><div class="note">${K.atant ? "Depo an atant yo konte nan ekar la (ajan an deja touche kòb la)." : "Depo an atant yo pa konte nan ekar la."} Klike sou yon rubrik pou wè l pa ajan.</div></div>`;
+    let h = `<div class="kat"><h2>Total jeneral · tout ajan</h2><div class="wrap"><table>${antet("Rubrik")}`;
+    for (const x of rows) h += liy(esc(x.l), x.t, x.r, `class="klik" data-rub="${x.r}"`);
+    h += `</table></div><div class="note"><b>Data Importe</b> = Supabase valide + Supabase an atant + Importation Globale. <b>Ekar</b> = Data Importe − Declaration Agent.
+      Kopi istorik Airtable ki te enpòte sou Supabase yo pa konte bò Supabase (yo deja nan Importation Globale). Klike sou yon rubrik pou wè l pa ajan.</div></div>`;
     $("vi").innerHTML = h;
     $("vi").querySelectorAll("[data-rub]").forEach((tr) => (tr.onclick = () => { st.rubAjan = tr.dataset.rub; st.tab = "ajan"; rann(); }));
   }
@@ -344,23 +341,28 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     }
     return T;
   }
+  function chipsAjan(K, k, r, c) {
+    const m = Object.values(K.meta).map((x) => x[k]).filter(Boolean);
+    const err = m.reduce((a, x) => a + x.err, 0), dbl = m.reduce((a, x) => a + x.doublon, 0), rapo = m.reduce((a, x) => a + x.rapo, 0);
+    const nd = doubAjan(K, k, r);
+    return (K.sbKolekte.has(k) ? ` <span class="chip ok">app</span>` : "")
+      + (nd ? ` <span class="chip er" title="Menm jou, menm rubrik : montan sou Supabase AK nan Importation Globale. Verifye si se pa menm tranzaksyon yo ki antre 2 fwa.">posib doub</span>` : "")
+      + (err ? ` <span class="chip er" title="Liy make Erronees nan Importation">${err} erè</span>` : "")
+      + (dbl ? ` <span class="chip av" title="Rapò make Doublon">${dbl} doublon</span>` : "")
+      + (!rapo && imp(c) ? ` <span class="chip av" title="Pa gen rapò nan Declaration Agent">san rapò</span>` : "");
+  }
   function vAjan(K) {
     const r = st.rubAjan, T = totAjan(K, r);
-    const ks = Object.keys(T).filter((k) => T[k].s || T[k].sa || T[k].i || T[k].d || K.sbKolekte.has(k)).sort((a, b) => a.localeCompare(b));
+    const ks = Object.keys(T).filter((k) => T[k].s || T[k].sa || T[k].i || T[k].d).sort((a, b) => a.localeCompare(b));
     const opt = RUB.map(([x, l]) => `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}</option>`).join("");
     let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa ajan · ${esc(RUB_L[r])}</h2>
-      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet()}`;
+      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet("Ajan")}`;
     const tot = sòm([]);
     for (const k of ks) {
       const c = T[k]; for (const z in tot) tot[z] += c[z];
-      const sbK = K.sbKolekte.has(k) && RUB_SB.has(r);
-      const m = Object.values(K.meta).map((x) => x[k]).filter(Boolean);
-      const err = m.reduce((a, x) => a + x.err, 0), dbl = m.reduce((a, x) => a + x.doublon, 0), rapo = m.reduce((a, x) => a + x.rapo, 0);
-      const chips = (sbK ? ` <span class="chip ok">app</span>` : "") + (err ? ` <span class="chip er" title="Liy make Erronees nan Importation">${err} erè</span>` : "")
-        + (dbl ? ` <span class="chip av" title="Rapò make Doublon">${dbl} doublon</span>` : "") + (!rapo && c.i ? ` <span class="chip av" title="Pa gen rapò nan Declaration Agent">san rapò</span>` : "");
-      h += liy(esc(k) + chips, c, sbK, `class="klik" data-k="${esc(k)}"`);
+      h += liy(esc(k) + chipsAjan(K, k, r, c), c, r, `class="klik" data-k="${esc(k)}"`);
     }
-    h += liy("TOTAL", tot, false, 'class="tot"').replace("<tr ", "<tr ");
+    h += liy("TOTAL", tot, r, 'class="tot"');
     h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
     $("vi").innerHTML = h;
     $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
@@ -369,13 +371,15 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   function vJou(K) {
     const r = st.rubAjan;
     const opt = RUB.map(([x, l]) => `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}</option>`).join("");
-    let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa jou · ${esc(RUB_L[r])} (ajan ki sou app la)</h2>
-      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet()}`;
+    let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa jou · ${esc(RUB_L[r])} · tout ajan</h2>
+      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet("Jou")}`;
+    const tot = sòm([]);
     for (const j of K.jous) {
-      const lst = [...K.sbKolekte].map((k) => K.A[j]?.[k]?.[r]).filter(Boolean);
-      h += liy(fd(j), sòm(lst), RUB_SB.has(r));
+      const c = sòm(Object.values(K.A[j] || {}).map((x) => x[r]).filter(Boolean));
+      for (const z in tot) tot[z] += c[z];
+      h += liy(fd(j), c, r);
     }
-    h += `</table></div></div>`;
+    h += liy("TOTAL", tot, r, 'class="tot"') + `</table></div></div>`;
     $("vi").innerHTML = h;
     $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
   }
@@ -403,15 +407,14 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   // ---------- Detay yon ajan ----------
   function ouvriAjan(k) {
     const K = st.K;
-    const sbK = K.sbKolekte.has(k);
     const rubs = RUB.filter(([r]) => K.jous.some((j) => K.A[j]?.[k]?.[r]));
-    let h = `<div class="wrap"><table><tr><th>Jou</th><th>Rubrik</th><th>Supabase valide</th><th>An atant</th><th>Importation</th><th>Declaration</th><th>Ekar Sup − Imp</th><th>Ekar Imp − Dec</th><th></th></tr>`;
+    let h = `<div class="wrap"><table><tr><th>Jou</th><th>Rubrik</th><th>Supabase valide</th><th>An atant</th><th>Importation</th><th class="imp">Data Importe</th><th>Declaration</th><th>Ekar</th><th></th></tr>`;
     for (const j of K.jous) for (const [r, l] of rubs) {
       const c = K.A[j]?.[k]?.[r]; if (!c) continue;
-      const sk = sbK && RUB_SB.has(r);
-      const s = sk ? sbV(c, K.atant) : null;
-      h += `<tr><td>${fd(j)}</td><td style="text-align:left">${esc(l)}</td><td>${sk ? nf(c.s) : "—"}</td><td>${sk ? nf(c.sa) : "—"}</td><td>${nf(c.i)}</td><td>${nf(c.d)}</td>
-        ${ekarCel(s, c.i, sk)}${ekarCel(c.i, c.d)}<td>${sk && Math.round(s - c.i) ? `<button data-j="${j}">Wè liy yo</button>` : ""}</td></tr>`;
+      const sk = RUB_SB.has(r);
+      const bouton = sk && (doub(c) || Math.round(imp(c) - c.d)) ? `<button data-j="${j}">${doub(c) ? "Posib doub · wè liy yo" : "Wè liy yo"}</button>` : "";
+      h += `<tr><td>${fd(j)}</td><td style="text-align:left">${esc(l)}</td><td>${sk ? nf(c.s) : "—"}</td><td>${sk ? nf(c.sa) : "—"}</td><td>${nf(c.i)}</td>
+        <td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ekarCel(imp(c), c.d)}<td>${bouton}</td></tr>`;
     }
     h += `</table></div>`;
     const m = Object.entries(K.meta).map(([j, x]) => x[k] && `${fd(j)} : ${[...x[k].non].join(", ")}${x[k].rapo ? ` · Cash deklare ${nf(x[k].cash)} · Encaisse ${nf(x[k].encaisse)}` : " · pa gen rapò"}`).filter(Boolean);
@@ -428,7 +431,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       const nonAt = [...(K.meta[j]?.[k]?.non || [k])];
       const [s, a] = await Promise.all([sb.rpc("rapw_detay", { p_jou: j, p_uids: uids }), fnReseye({ aksyon: "detay", jou: j, kolekte: nonAt })]);
       if (s.error) throw new Error(s.error.message);
-      const S = (s.data || []).filter((x) => RUB_SB.has(x.rub) && (K.atant || x.st !== "pending"))
+      const S = (s.data || []).filter((x) => RUB_SB.has(x.rub))
         .map((x) => ({ kont: (x.kod || x.no_compte || "").trim(), rub: x.rub, m: x.rub === "grandon" && x.tip !== "D" ? -x.montan : x.montan, x }));
       const I = []; for (const l of a.liy) for (const [r, v] of Object.entries(l.v)) if (RUB_SB.has(r)) I.push({ kont: String(l.kont || "").trim(), rub: r, m: v, l });
       const kle = (o) => `${o.kont}|${o.rub}|${Math.round(o.m)}`;
@@ -437,8 +440,11 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       for (const o of S) { const p = pool[kle(o)]; if (p && p.length) matche.push([o, p.shift()]); else sèlSb.push(o); }
       const sèlI = Object.values(pool).flat();
       const t = (lst, kol) => lst.length ? `<table><tr><th>Kont</th><th>Rubrik</th><th>Montan</th><th>${kol}</th></tr>${lst.map((o) => `<tr><td>${esc(o.kont)}</td><td>${esc(RUB_L[o.rub])}</td><td>${nf(o.m)}</td><td>${o.x ? esc(o.x.kliyan) + (o.x.st === "pending" ? ' <span class="chip av">an atant</span>' : "") : esc(o.l.non || "") + (o.l.erronees ? ' <span class="chip er">Erronees</span>' : "")}</td></tr>`).join("")}</table>` : `<div class="note okc">Okenn</div>`;
-      box.innerHTML = `<h2 style="margin-top:14px">Liy yo · ${fd(j)} · ${matche.length} liy matche</h2><div class="kol3">
-        <div><h2 class="mut">Sèlman sou Supabase (${sèlSb.length})</h2>${t(sèlSb, "Kliyan")}</div>
+      box.innerHTML = `<h2 style="margin-top:14px">Liy yo · ${fd(j)}</h2>
+        <div class="kat" style="border-color:var(--er)"><h2 style="color:var(--er)">Nan 2 sous yo, menm kont + menm montan (${matche.length}) : posib doub</h2>
+          ${matche.length ? "Tranzaksyon sa yo parèt sou Supabase AK nan Importation Globale : yo konte 2 fwa nan Data Importe. Verifye ak ekip data a." : ""}
+          ${t(matche.map((p) => p[0]), "Kliyan")}</div>
+        <div class="kol3"><div><h2 class="mut">Sèlman sou Supabase (${sèlSb.length})</h2>${t(sèlSb, "Kliyan")}</div>
         <div><h2 class="mut">Sèlman nan Importation Globale (${sèlI.length})</h2>${t(sèlI, "Kliyan")}</div></div>
         ${a.koupe ? '<div class="err">Twòp liy : lis Importation an koupe.</div>' : ""}`;
     } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
@@ -447,7 +453,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
 
   // ---------- Onglè, CSV, enprime ----------
   document.querySelectorAll("#tabs [data-t]").forEach((b) => (b.onclick = () => { st.tab = b.dataset.t; rann(); }));
-  $("atant").onchange = rann; $("gwoupe").onchange = rann;
+  $("gwoupe").onchange = rann;
   $("enprime").onclick = () => window.print();
   $("csv").onclick = () => {
     const t = $("vi").querySelector("table"); if (!t) return;
