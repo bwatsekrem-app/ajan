@@ -147,11 +147,28 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     $("envChip").textContent = envK === "prod" ? "PWODIKSYON" : "TÈS";
     $("envChip").className = "env " + (envK === "prod" ? "prod" : "tes");
   }
+  // Sonje dènye chaj la (Chrome ka rechaje paj la lè w soti nan onglè a) : sessionStorage, pou baz sa a sèlman
+  const KLE_SOVE = () => "rapw_eta_" + envK;
+  function sove() {
+    try { sessionStorage.setItem(KLE_SOVE(), JSON.stringify({ deb: $("deb").value, fen: $("fen").value, gwoupe: $("gwoupe").checked,
+      done: st.done, imp: st.imp, err: st.err, tab: st.tab, rubAjan: st.rubAjan, lè: Date.now() })); } catch (_) {}
+  }
+  function restore() {
+    try {
+      const x = JSON.parse(sessionStorage.getItem(KLE_SOVE()) || "null");
+      if (!x || Date.now() - x.lè > 12 * 3600e3) return false;
+      $("deb").value = x.deb; $("fen").value = x.fen; $("gwoupe").checked = x.gwoupe !== false;
+      st.done = x.done; st.imp = x.imp || {}; st.err = x.err || []; st.tab = x.tab || "jeneral"; st.rubAjan = x.rubAjan || "depot";
+      $("eta").textContent = st.done ? `Chaje : ${fd(x.deb)} → ${fd(x.fen)} (sonje depi ${new Date(x.lè).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · klike « Chaje » pou mete l ajou)` : "";
+      return true;
+    } catch (_) { return false; }
+  }
   async function kòmanse() {
     kreyeKlyan();
     const { data } = await sb.auth.getSession();
     sess = data.session;
     afiche();
+    if (sess && restore()) rann();
   }
   function afiche() {
     $("login").hidden = !!sess; $("app").hidden = !sess; $("soti").hidden = !sess;
@@ -160,7 +177,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   $("env").onchange = async () => {
     envK = $("env").value;
     try { localStorage.setItem("rapw_env", envK); } catch (_) {}
-    st.done = null; st.imp = {}; $("vi").innerHTML = "";
+    st.done = null; st.imp = {}; st.tab = "jeneral"; $("vi").innerHTML = "";
     await kòmanse();
   };
   $("fLogin").onsubmit = async (e) => {
@@ -172,6 +189,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     const { data, error } = await sb.auth.signInWithPassword({ email, password: f.pw.value });
     if (error) { $("loginErr").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     sess = data.session; afiche();
+    if (restore()) rann();
   };
   $("soti").onclick = async () => { await sb.auth.signOut(); sess = null; afiche(); };
 
@@ -228,6 +246,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       $("eta").textContent = `Chaje : ${fd(deb)} → ${fd(fen)} · ${jous.length} jou`;
     } catch (e) { st.err.push(e.message); $("eta").textContent = ""; }
     $("erè").innerHTML = st.err.length ? `<div class="err">${esc(st.err.join("\n"))}</div>` : "";
+    sove();
     $("chaje").disabled = false; setTimeout(() => (pb.hidden = true), 600);
     rann();
   };
@@ -372,7 +391,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     h += liy("TOTAL", tot, r, 'class="tot"');
     h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
     $("vi").innerHTML = h;
-    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
+    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); sove(); };
     $("vi").querySelectorAll("[data-k]").forEach((tr) => (tr.onclick = () => ouvriAjan(tr.dataset.k)));
   }
   function vJou(K) {
@@ -388,7 +407,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     }
     h += liy("TOTAL", tot, r, 'class="tot"') + `</table></div></div>`;
     $("vi").innerHTML = h;
-    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
+    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); sove(); };
   }
   function vKoresp(K) {
     const D = st.done;
@@ -592,7 +611,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   $("dlgF").onclick = () => $("dlg").close();
 
   // ---------- Onglè, CSV, enprime ----------
-  document.querySelectorAll("#tabs [data-t]").forEach((b) => (b.onclick = () => { st.tab = b.dataset.t; rann(); }));
+  document.querySelectorAll("#tabs [data-t]").forEach((b) => (b.onclick = () => { st.tab = b.dataset.t; rann(); sove(); }));
   $("gwoupe").onchange = rann;
   $("enprime").onclick = () => window.print();
   $("csv").onclick = () => {
