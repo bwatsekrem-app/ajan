@@ -50,6 +50,18 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 dialog .tet{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--li)}
 dialog .ko{padding:14px;max-height:75vh;overflow:auto}
 .kol3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.mod-ko{padding:16px;max-height:60vh;overflow:auto}
+.mod-ko .lis{margin-top:10px;border:1px solid var(--li);border-radius:8px;max-height:38vh;overflow:auto}
+.mod-ko .lis table{font-size:13px}
+.mod-ko textarea{width:100%;min-height:70px;font:inherit;padding:8px;border:1px solid var(--li);border-radius:7px;background:var(--kat);color:var(--tx);margin-top:10px}
+.mod-pye{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--li)}
+.mod-ik{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;margin-right:10px;flex:none}
+.mod-ik.ok{background:var(--okb);color:var(--ok)}.mod-ik.av{background:var(--avb);color:var(--av)}.mod-ik.er{background:var(--erb);color:var(--er)}.mod-ik.in{background:var(--th);color:var(--pri)}
+.mod-tet{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--li)}
+.mod-tet h2{margin:0}
+.mod-tot{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-weight:600}
+button.danje{background:var(--er);border-color:var(--er);color:#fff}
+#mod{max-width:min(640px,94vw)}
 @media print{header .row,.tabs,.noprint{display:none!important}body{background:#fff}.kat{border:none}}
 @media (max-width:600px){main{padding:10px}th,td{padding:5px 6px;font-size:13px}}
 </style>
@@ -103,6 +115,9 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   </section>
 </main>
 
+<dialog id="mod"><div class="mod-tet"><span class="mod-ik in" id="modIk">i</span><h2 id="modT"></h2></div>
+  <div class="mod-ko"><div id="modM"></div><div id="modD"></div><textarea id="modTx" hidden></textarea><div id="modE" class="err" hidden></div></div>
+  <div class="mod-pye"><button id="modAn">Anile</button><button class="pri" id="modOk">OK</button></div></dialog>
 <dialog id="dlg"><div class="tet"><h2 id="dlgT"></h2><button id="dlgF">Fèmen</button></div><div class="ko" id="dlgK"></div></dialog>
 
 <script>
@@ -226,9 +241,9 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
 
   $("chaje").onclick = async () => {
     const deb = $("deb").value, fen = $("fen").value;
-    if (!deb || !fen || fen < deb) return alert("Peryòd la pa bon");
+    if (!deb || !fen || fen < deb) return mesaj("Peryòd la pa bon", "Dat «Rive» a dwe apre oswa menm jou ak dat «Soti» a.");
     const jous = jouLis(deb, fen);
-    if (jous.length > 31) return alert("Maksimòm 31 jou alafwa");
+    if (jous.length > 31) return mesaj("Peryòd la twò long", "Ou ka chaje maksimòm <b>31 jou</b> alafwa.");
     $("chaje").disabled = true; $("erè").innerHTML = ""; st.err = [];
     const pb = $("prog"); pb.hidden = false; pb.firstElementChild.style.width = "0";
     try {
@@ -422,11 +437,44 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     $("vi").innerHTML = h;
     $("vi").querySelectorAll("select[data-u]").forEach((s) => (s.onchange = async () => {
       const { error } = await sb.rpc("rapw_ajan_konekte", { p_user: s.dataset.u, p_nom: s.value || null });
-      if (error) return alert(error.message);
+      if (error) return mesaj("Erè", esc(error.message), "er");
       const r = await sb.rpc("rapw_sentez", { p_deb: st.done.deb, p_fen: st.done.fen });
       if (!r.error) st.done = r.data;
       rann();
     }));
+  }
+
+  // ---------- Fenèt konfimasyon / mesaj (ranplase confirm, alert, prompt) ----------
+  // modal({ tit, mesaj, detay (html), kalite: "in"|"ok"|"av"|"er", ok, anile (false = pa gen bouton anile), danje, antre: { plas, obligatwa } })
+  function modal(o) {
+    return new Promise((rezoud) => {
+      const d = $("mod"), tx = $("modTx");
+      const ik = { in: "i", ok: "✓", av: "!", er: "×" }[o.kalite || "in"];
+      $("modIk").className = "mod-ik " + (o.kalite || "in"); $("modIk").textContent = ik;
+      $("modT").textContent = o.tit || "";
+      $("modM").innerHTML = o.mesaj || ""; $("modD").innerHTML = o.detay || "";
+      tx.hidden = !o.antre; tx.value = ""; tx.placeholder = o.antre?.plas || "";
+      $("modE").hidden = true;
+      $("modOk").textContent = o.ok || "OK"; $("modOk").className = o.danje ? "danje" : "pri";
+      $("modAn").hidden = o.anile === false; $("modAn").textContent = o.anile || "Anile";
+      const fini = (rep) => { d.close(); $("modOk").onclick = $("modAn").onclick = d.oncancel = null; rezoud(rep); };
+      $("modOk").onclick = () => {
+        if (o.antre?.obligatwa && tx.value.trim().length < 3) { $("modE").textContent = "Ekri yon rezon (omwen 3 lèt)."; $("modE").hidden = false; tx.focus(); return; }
+        fini({ ok: true, tèks: tx.value.trim() });
+      };
+      $("modAn").onclick = () => fini({ ok: false });
+      d.oncancel = (e) => { e.preventDefault(); fini({ ok: false }); };
+      d.showModal();
+      (o.antre ? tx : $("modOk")).focus();
+    });
+  }
+  const mesaj = (tit, txt, kalite = "av") => modal({ tit, mesaj: txt, kalite, anile: false });
+  // Rezime rezilta yon aksyon (OK / erè)
+  function rezilta(tit, lis) {
+    const ok = lis.filter((r) => r.ok), er = lis.filter((r) => !r.ok);
+    return modal({ tit, kalite: er.length ? (ok.length ? "av" : "er") : "ok", anile: false, ok: "Fèmen",
+      mesaj: `<div class="mod-tot"><span class="okc">✓ ${ok.length} reyisi</span>${er.length ? `<span style="color:var(--er)">× ${er.length} erè</span>` : ""}</div>`,
+      detay: er.length ? `<div class="lis"><table><tr><th>Liy</th><th>Erè</th></tr>${er.map((r) => `<tr><td>${esc(r.kod || r.id || r.rec || "")}</td><td style="text-align:left;white-space:normal">${esc(r.mesaj || "")}</td></tr>`).join("")}</table></div>` : "" });
   }
 
   // ================= Onglè 2 : Synchro Supabase ↔ baz Airtable mwa yo =================
@@ -498,7 +546,15 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   }
   async function voyeSb() {
     const ids = [...$("syA").querySelectorAll(".syC:checked")].map((c) => c.value);
-    if (!ids.length || !confirm(`Voye ${ids.length} tranzaksyon nan baz Airtable mwa a ?`)) return;
+    if (!ids.length) return;
+    const chwa = (SY.sb.tx || []).filter((t) => ids.includes(t.id));
+    const kol = (t) => t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
+    const r0 = await modal({ tit: `Voye ${ids.length} tranzaksyon nan Airtable ?`, kalite: "av", ok: `Wi, voye ${ids.length}`,
+      mesaj: `Sa ap kreye <b>${ids.length} liy</b> nan baz ofisyèl ${[...new Set(chwa.map((t) => "«Transactions " + ["", "Janv", "Fev", "Mars", "Avril", "Mai", "Juin", "Juil", "Aout", "Sept", "Oct", "Nov", "Dec"][+t.mwa.slice(5)] + " " + t.mwa.slice(0, 4) + "»"))].join(", ")} (Source = Supabase).
+        Si ekip data a te deja antre youn ladan yo, sistèm nan ap konekte l olye l kreye yon lòt.
+        <div class="mod-tot"><span>Total : ${nf(chwa.reduce((a, t) => a + (t.gr && t.tip !== "D" ? -t.montant : t.montant), 0))} G</span></div>`,
+      detay: `<div class="lis"><table><tr><th>Dat</th><th>Kont</th><th>Kolòn</th><th>Montan</th><th>Kolektè</th></tr>${chwa.map((t) => `<tr><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td style="text-align:left">${t.kolekte ? esc(t.kolekte) : '<span class="chip av">san kolektè</span>'}</td></tr>`).join("")}</table></div>` });
+    if (!r0.ok) return;
     $("syVoye").disabled = true;
     for (let i = 0; i < ids.length; i += 40) {
       $("syVoye").textContent = `Ap voye… ${Math.min(i + 40, ids.length)}/${ids.length}`;
@@ -506,6 +562,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       catch (e) { jounal([{ ok: false, mesaj: e.message }]); break; }
     }
     $("syLog").innerHTML = logHtml();
+    await rezilta("Rezilta voye a", SY.log.slice(0, ids.length));
     await chercheSb();
   }
   async function liAt() {
@@ -546,11 +603,21 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   async function aksyonAt(b) {
     const blok = b.parentElement.previousElementSibling;
     const chwa = [...blok.querySelectorAll(".atC:checked")].map((c) => SY.atMap[c.value]).filter(Boolean);
-    if (!chwa.length) return alert("Chwazi omwen yon liy");
+    if (!chwa.length) return mesaj("Pa gen anyen chwazi", "Make omwen yon liy anvan.", "in");
     const ak = b.dataset.ak;
     let rezon = "";
-    if (ak === "rejte") { rezon = prompt(`Rejte ${chwa.length} operasyon : poukisa ?`) || ""; if (!rezon) return; }
-    else if (!confirm(`${ak === "konekte" ? "Konekte" : "Enpote"} ${chwa.length} operasyon ?`)) return;
+    const lisH = `<div class="lis"><table><tr><th>Dat</th><th>Kont</th><th>Kolòn</th><th>Montan</th><th>Kolektè</th></tr>${chwa.map((o) => `<tr><td>${fd(o.jou)}</td><td>${esc(o.kod)}</td><td style="text-align:left">${esc(o.kolon)}</td><td>${nf(o.m)}</td><td style="text-align:left">${esc(o.kolekte)}</td></tr>`).join("")}</table></div>`;
+    const tot = `<div class="mod-tot"><span>${chwa.length} operasyon · ${nf(chwa.reduce((a, o) => a + o.m, 0))} G</span></div>`;
+    const TX = {
+      enpote: { tit: `Enpote ${chwa.length} depo sou Supabase ?`, kalite: "in", ok: "Wi, enpote", mesaj: "Depo sa yo ap antre sou Supabase <b>an atant</b> : Kès la ap valide yo." + tot },
+      apwouve: { tit: `Apwouve ${chwa.length} alèt ?`, kalite: "av", ok: "Wi, mwen verifye yo · apwouve", mesaj: "Operasyon sa yo (retrè, frè, Grandon) pase pa Airtable. Lè w apwouve yo, yo antre sou Supabase <b>touswit</b> (depo Grandon an atant pou Kès). Asire w ou verifye yo." + tot },
+      konekte: { tit: `Konekte ${chwa.length} liy ?`, kalite: "in", ok: "Wi, konekte", mesaj: "Liy Airtable sa yo se menm tranzaksyon ak sa ki deja sou Supabase. Pa gen anyen ki ap kreye : yo jis p ap parèt ankò." + tot },
+      rejte: { tit: `Rejte ${chwa.length} operasyon ?`, kalite: "er", ok: "Rejte", danje: true, antre: { plas: "Poukisa ? (ex: erè ekip data, doub…)", obligatwa: true },
+        mesaj: "Operasyon sa yo p ap janm antre sou Supabase. Ekri rezon an :" + tot },
+    }[ak];
+    const r0 = await modal({ ...TX, detay: lisH });
+    if (!r0.ok) return;
+    if (ak === "rejte") rezon = r0.tèks;
     b.disabled = true;
     const body = { aksyon: ak === "apwouve" ? "enpote" : ak, apwouve: ak === "apwouve", rezon,
       ops: chwa.map((o) => ({ base: o.base, rec: o.rec, kolon: o.kolon, tx: o.tx, kod: o.kod })) };
@@ -559,6 +626,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       catch (e) { jounal([{ ok: false, mesaj: e.message }]); break; }
     }
     $("syLog").innerHTML = logHtml();
+    await rezilta({ enpote: "Rezilta enpòtasyon an", apwouve: "Rezilta apwobasyon an", konekte: "Rezilta koneksyon an", rejte: "Rezilta rejè a" }[ak], SY.log.slice(0, chwa.length));
     await liAt();
   }
 
