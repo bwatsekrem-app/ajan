@@ -95,6 +95,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       <button data-t="ajan">Pa ajan</button>
       <button data-t="jou">Pa jou</button>
       <button data-t="koresp">Ajan Airtable ↔ Supabase</button>
+      <button data-t="sync">⇄ Synchro</button>
       <span style="flex:1"></span>
       <button id="csv">Ekspòte CSV</button><button id="enprime">Enprime</button>
     </div>
@@ -300,6 +301,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   }
   function rann() {
     document.querySelectorAll("#tabs [data-t]").forEach((b) => b.classList.toggle("on", b.dataset.t === st.tab));
+    if (st.tab === "sync") return vSync();
     const K = kalkile();
     if (!K) { $("vi").innerHTML = `<div class="kat mut">Chwazi yon peryòd epi klike « Chaje ».</div>`; return; }
     st.K = K;
@@ -407,6 +409,139 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       if (!r.error) st.done = r.data;
       rann();
     }));
+  }
+
+  // ================= Onglè 2 : Synchro Supabase ↔ baz Airtable mwa yo =================
+  async function fnSync(body) {
+    const { data: s } = await sb.auth.getSession();
+    if (!s.session) throw new Error("Sesyon an fini : konekte ankò");
+    const r = await fetch(ENV[envK].url + "/functions/v1/rapwochman-sync", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + s.session.access_token, apikey: ENV[envK].key },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({ error: "Repons envalid (" + r.status + ")" }));
+    if (!r.ok || j.error) throw new Error(j.error || "Erè " + r.status);
+    return j;
+  }
+  const SY = { sb: null, at: null, log: [] };
+  const TIP_L = { D: "Depo", R: "Retrè", FL: "Frè", FA: "Frais Auto", V: "Virement" };
+  const ST_AT = {
+    nouvo: ["Nouvo", "av"], deja: ["Deja sou Supabase", "ok"], lye: ["Deja trete", "ok"], rejte: ["Rejte", "er"],
+    kont_manke: ["Kont pa sou Supabase", "er"], pa_sipote: ["Pa sipòte", "er"],
+  };
+  function jounal(lis) {
+    SY.log = [...lis.map((r) => ({ ...r, lè: new Date().toLocaleTimeString("fr-FR") })), ...SY.log].slice(0, 300);
+  }
+  function vSync() {
+    const deb = $("deb").value, fen = $("fen").value;
+    let h = `<div class="kat"><h2>Synchro Supabase ↔ baz Airtable mwa yo</h2>
+      <div class="note">Peryòd : ${fd(deb)} → ${fd(fen)} (chanje l anlè a). Synchro a kòmanse 11/11/2026. Tranzaksyon Supabase yo ale nan Airtable sèlman lè Kès la valide yo.
+      Liy Airtable yo (kont Sedeline/Ketsia + Grandon) : depo yo antre sou Supabase <b>an atant</b> pou Kès la ; retrè, frè ak Grandon se <b>alèt</b> : yon admin/manadjè dwe apwouve yo.</div></div>`;
+    // ---- A) Supabase → Airtable
+    h += `<div class="kat"><div class="row" style="justify-content:space-between"><h2>1 · Supabase → Airtable</h2>
+      <div class="row noprint"><button id="syChe">Chèche</button><button class="pri" id="syVoye" disabled>Voye sa ki chwazi yo</button></div></div><div id="syA" class="note">Klike « Chèche ».</div></div>`;
+    // ---- B) Airtable → Supabase
+    h += `<div class="kat"><div class="row" style="justify-content:space-between"><h2>2 · Airtable → Supabase</h2>
+      <div class="row noprint"><button id="syLi">Li Airtable</button></div></div><div id="syB" class="note">Klike « Li Airtable ».</div></div>`;
+    h += `<div class="kat"><h2>Jounal</h2><div id="syLog">${logHtml()}</div></div>`;
+    $("vi").innerHTML = h;
+    $("syChe").onclick = chercheSb; $("syVoye").onclick = voyeSb; $("syLi").onclick = liAt;
+    if (SY.sb) rannSb(); if (SY.at) rannAt();
+  }
+  function logHtml() {
+    return SY.log.length ? `<div class="wrap"><table><tr><th>Lè</th><th>Rezilta</th><th>Mesaj</th></tr>${SY.log.map((r) => `<tr><td>${esc(r.lè)}</td><td>${r.ok ? '<span class="chip ok">OK</span>' : '<span class="chip er">Erè</span>'}</td><td style="text-align:left;white-space:normal">${esc(r.kod || r.id || r.rec || "")} · ${esc(r.mesaj || "")}</td></tr>`).join("")}</table></div>` : `<div class="note">Anyen poko fèt.</div>`;
+  }
+  async function chercheSb() {
+    $("syA").innerHTML = `<div class="note">Ap chèche…</div>`;
+    const { data, error } = await sb.rpc("rapw_sync_lis", { p_deb: $("deb").value, p_fen: $("fen").value });
+    if (error) { $("syA").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    SY.sb = data; rannSb();
+  }
+  function rannSb() {
+    const tx = SY.sb.tx || [], poko = tx.filter((t) => !t.rec && !t.v8);
+    const kol = (t) => t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
+    let h = `<div class="note">${tx.length} tranzaksyon valide · <b>${poko.length} poko nan Airtable</b> · ${tx.length - poko.length} deja ladan l${SY.sb.an_atant ? ` · ${SY.sb.an_atant} depo poko valide pa Kès (yo p ap ale toutotan yo pa valide)` : ""}</div>`;
+    const bazManke = [...new Set(poko.map((t) => t.mwa))].filter((m) => !(SY.sb.baz || {})[m]);
+    if (bazManke.length) h += `<div class="err">Baz Airtable pa konfigire pou : ${bazManke.join(", ")}</div>`;
+    if (tx.length) {
+      h += `<div class="wrap"><table><tr><th><input type="checkbox" id="syTout" ${poko.length ? "" : "disabled"}></th><th>Dat</th><th>Kont</th><th>Kliyan</th><th>Kolòn Airtable</th><th>Montan</th><th>Solde</th><th>Kolektè</th><th>Estati</th></tr>`;
+      for (const t of tx) {
+        const st = t.rec ? '<span class="chip ok">nan Airtable</span>' : t.v8 ? '<span class="chip ok">voye pa v8</span>' : '<span class="chip av">poko</span>';
+        h += `<tr><td>${!t.rec && !t.v8 ? `<input type="checkbox" class="syC" value="${t.id}">` : ""}</td><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(t.kliyan)}</td>
+          <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${nf(t.solde)}</td><td style="text-align:left">${esc(t.kolekte || "")}</td><td>${st}</td></tr>`;
+      }
+      h += `</table></div>`;
+    }
+    $("syA").innerHTML = h;
+    const maj = () => { const n = $("syA").querySelectorAll(".syC:checked").length; $("syVoye").disabled = !n; $("syVoye").textContent = n ? `Voye ${n} nan Airtable` : "Voye sa ki chwazi yo"; };
+    $("syA").querySelectorAll(".syC").forEach((c) => (c.onchange = maj));
+    if ($("syTout")) $("syTout").onchange = (e) => { $("syA").querySelectorAll(".syC").forEach((c) => (c.checked = e.target.checked)); maj(); };
+    maj();
+  }
+  async function voyeSb() {
+    const ids = [...$("syA").querySelectorAll(".syC:checked")].map((c) => c.value);
+    if (!ids.length || !confirm(`Voye ${ids.length} tranzaksyon nan baz Airtable mwa a ?`)) return;
+    $("syVoye").disabled = true;
+    for (let i = 0; i < ids.length; i += 40) {
+      $("syVoye").textContent = `Ap voye… ${Math.min(i + 40, ids.length)}/${ids.length}`;
+      try { const r = await fnSync({ aksyon: "voye", ids: ids.slice(i, i + 40) }); jounal(r.detay || []); }
+      catch (e) { jounal([{ ok: false, mesaj: e.message }]); break; }
+    }
+    $("syLog").innerHTML = logHtml();
+    await chercheSb();
+  }
+  async function liAt() {
+    $("syB").innerHTML = `<div class="note">Ap li baz Airtable yo… (sa ka pran yon ti tan)</div>`;
+    try { SY.at = await fnSync({ aksyon: "li", deb: $("deb").value, fen: $("fen").value }); rannAt(); }
+    catch (e) { $("syB").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+  }
+  function rannAt() {
+    const ops = SY.at.ops || [];
+    const gwoup = {}; for (const o of ops) (gwoup[o.statut] ||= []).push(o);
+    const kle = (o) => `${o.base}|${o.rec}|${o.kolon}`;
+    SY.atMap = Object.fromEntries(ops.map((o) => [kle(o), o]));
+    let h = `<div class="note">${ops.length} operasyon nan ${new Set(ops.map((o) => o.rec)).size} liy Airtable (${fd(SY.at.deb)} → ${fd(SY.at.fen)}) · ` +
+      Object.entries(ST_AT).map(([k, [l]]) => `${l} : ${(gwoup[k] || []).length}`).join(" · ") + `</div>`;
+    if ((SY.at.erè || []).length) h += `<div class="err">${esc(SY.at.erè.join("\n"))}</div>`;
+    if (SY.at.koupe) h += `<div class="err">Twòp liy : lis la koupe. Chwazi yon peryòd pi kout.</div>`;
+    const tab = (lis, chk) => `<div class="wrap"><table><tr>${chk ? "<th></th>" : ""}<th>Dat</th><th>Kont</th><th>Kliyan</th><th>Kolòn</th><th>Montan</th><th>Solde Airtable</th><th>Kolektè</th></tr>${lis.map((o) =>
+      `<tr>${chk ? `<td><input type="checkbox" class="atC" value="${esc(kle(o))}"></td>` : ""}<td>${fd(o.jou)}</td><td>${esc(o.kod)}</td><td style="text-align:left">${esc(o.non || "")}</td><td style="text-align:left">${esc(o.kolon)}${o.alet ? ' <span class="chip av">alèt</span>' : ""}</td><td>${nf(o.m)}</td><td>${nf(o.solde)}</td><td style="text-align:left">${esc(o.kolekte)}</td></tr>`).join("")}</table></div>`;
+    const nouvo = gwoup.nouvo || [];
+    const depo = nouvo.filter((o) => !o.alet), alet = nouvo.filter((o) => o.alet);
+    h += `<h2 style="margin-top:12px">Depo pou antre sou Supabase (${depo.length})</h2><div class="note">Yo ap antre <b>an atant</b> : Kès la ap valide yo.</div>`;
+    h += depo.length ? tab(depo, true) + `<div class="row noprint" style="margin-top:6px"><button class="pri" data-ak="enpote" data-gr="d">Enpote sa ki chwazi yo</button><button data-ak="rejte" data-gr="d">Rejte</button></div>` : `<div class="note okc">Okenn</div>`;
+    h += `<h2 style="margin-top:12px">Alèt : bezwen apwouve (${alet.length})</h2><div class="note">Retrè, frè ak Grandon ki pase pa Airtable. Verifye yo anvan : yo antre <b>konfime</b> sou Supabase (depo Grandon an atant).</div>`;
+    h += alet.length ? tab(alet, true) + `<div class="row noprint" style="margin-top:6px"><button class="pri" data-ak="apwouve" data-gr="a">Apwouve epi enpote</button><button data-ak="rejte" data-gr="a">Rejte</button></div>` : `<div class="note okc">Okenn</div>`;
+    const deja = gwoup.deja || [];
+    h += `<h2 style="margin-top:12px">Deja sou Supabase (${deja.length})</h2><div class="note">Menm kont, kolòn, montan, jou : se menm tranzaksyon an. Konekte yo pou yo pa parèt ankò (pa gen anyen ki kreye).</div>`;
+    h += deja.length ? tab(deja, true) + `<div class="row noprint" style="margin-top:6px"><button data-ak="konekte" data-gr="k">Konekte sa ki chwazi yo</button></div>` : `<div class="note okc">Okenn</div>`;
+    for (const k of ["kont_manke", "pa_sipote"]) {
+      const l = gwoup[k] || [];
+      if (l.length) h += `<h2 style="margin-top:12px">${ST_AT[k][0]} (${l.length})</h2><div class="note">${k === "kont_manke" ? "Kont sa yo pa sou Supabase : tranzaksyon yo rete nan Airtable sèlman." : "Kolòn sa yo (Virement, Retour) dwe trete alamen."}</div>` + tab(l, false);
+    }
+    const tr = (gwoup.lye || []).length + (gwoup.rejte || []).length;
+    if (tr) h += `<div class="note" style="margin-top:10px">${tr} operasyon deja trete (enpote, konekte oswa rejte) pa parèt anlè a.</div>`;
+    $("syB").innerHTML = h;
+    // Chak seksyon gen pwòp kaz li : bouton an pran sa ki chwazi nan menm seksyon an
+    $("syB").querySelectorAll("button[data-ak]").forEach((b) => (b.onclick = () => aksyonAt(b)));
+  }
+  async function aksyonAt(b) {
+    const blok = b.parentElement.previousElementSibling;
+    const chwa = [...blok.querySelectorAll(".atC:checked")].map((c) => SY.atMap[c.value]).filter(Boolean);
+    if (!chwa.length) return alert("Chwazi omwen yon liy");
+    const ak = b.dataset.ak;
+    let rezon = "";
+    if (ak === "rejte") { rezon = prompt(`Rejte ${chwa.length} operasyon : poukisa ?`) || ""; if (!rezon) return; }
+    else if (!confirm(`${ak === "konekte" ? "Konekte" : "Enpote"} ${chwa.length} operasyon ?`)) return;
+    b.disabled = true;
+    const body = { aksyon: ak === "apwouve" ? "enpote" : ak, apwouve: ak === "apwouve", rezon,
+      ops: chwa.map((o) => ({ base: o.base, rec: o.rec, kolon: o.kolon, tx: o.tx, kod: o.kod })) };
+    for (let i = 0; i < body.ops.length; i += 40) {
+      try { const r = await fnSync({ ...body, ops: body.ops.slice(i, i + 40) }); jounal(r.detay || []); }
+      catch (e) { jounal([{ ok: false, mesaj: e.message }]); break; }
+    }
+    $("syLog").innerHTML = logHtml();
+    await liAt();
   }
 
   // ---------- Detay yon ajan ----------
