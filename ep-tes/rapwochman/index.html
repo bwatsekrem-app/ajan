@@ -68,7 +68,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   <section id="login" class="kat" hidden>
     <h2>Konekte (admin oswa manadjè)</h2>
     <form id="fLogin" class="row">
-      <label>Imèl<input name="email" type="email" required autocomplete="username"></label>
+      <label>Telefòn oswa imèl<input name="email" type="text" inputmode="text" required autocomplete="username" placeholder="ex: 3700 0000"></label>
       <label>Modpas<input name="pw" type="password" required autocomplete="current-password"></label>
       <button class="pri">Konekte</button>
     </form>
@@ -130,6 +130,9 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   const addJ = (s, n) => { const d = new Date(s + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const jouLis = (a, b) => { const o = []; for (let d = a; d <= b; d = addJ(d, 1)) o.push(d); return o; };
   const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 -]/g, " ").replace(/\s+/g, " ").trim();
+  // Menm règ ak aplikasyon an : telefòn 8 chif → 509XXXXXXXX@ajan.grandon.invalid ; imèl la rete jan l ye
+  const telefon8 = (t) => { let d = String(t || "").replace(/\D/g, ""); if (d.length === 11 && d.startsWith("509")) d = d.slice(3); return /^\d{8}$/.test(d) ? d : null; };
+  const idanEmail = (ident) => { const s = String(ident || "").trim(); if (s.includes("@")) return /^[^@\s]+@[^@\s]+$/.test(s) ? s.toLowerCase() : null; const t = telefon8(s); return t ? `509${t}@ajan.grandon.invalid` : null; };
   const prefiks = (s) => String(s ?? "").trim().replace(/^(a1|succu)\s*-\s*/i, "").trim();
 
   let envK = "tes";
@@ -151,7 +154,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   }
   function afiche() {
     $("login").hidden = !!sess; $("app").hidden = !sess; $("soti").hidden = !sess;
-    $("moun").textContent = sess ? sess.user.email : "";
+    $("moun").textContent = sess ? (sess.user.email || "").replace(/^509(\d{8})@ajan\.grandon\.invalid$/, "$1") : "";
   }
   $("env").onchange = async () => {
     envK = $("env").value;
@@ -163,7 +166,9 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     e.preventDefault();
     $("loginErr").innerHTML = "";
     const f = e.target;
-    const { data, error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value });
+    const email = idanEmail(f.email.value);
+    if (!email) { $("loginErr").innerHTML = `<div class="err">Tape 8 chif telefòn ou (oswa imèl ou si w se administratè).</div>`; return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: f.pw.value });
     if (error) { $("loginErr").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     sess = data.session; afiche();
   };
