@@ -19,7 +19,13 @@ const URL_ = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const db = createClient(URL_, SERVICE, { auth: { persistSession: false } });
 const AT = "https://api.airtable.com";
-const BAZ_EKRI = new Set(["appffRHvMN6t5q2rg"]); // sèl baz paj la ekri ladan l (pwen prezans, frè, foto iregilarite)
+// Sèl tab paj la gen dwa ekri ladan yo (baz/tab). Tout lòt ekriti refize.
+const EKRI_OTORIZE = new Set([
+  "appffRHvMN6t5q2rg/tblXglUdpMlmms7YM", // Suivi des irrégularités (photo du jour)
+  "appffRHvMN6t5q2rg/tblWLQHaWL0mM6aNM", // Pointages (présence)
+  "appffRHvMN6t5q2rg/tblWUKswD37CGxJk4", // Contrôle des frais
+  "app2n2B8Ct7FyLnVD/tblLnGF1UhkyPrrHB", // Performance · Contrôle quotidien
+]);
 const WOL = ["admin", "superviseur", "traitement", "validation"];
 const PAJ = ["releve", "alertes", "quotidien", "simulateur", "excedents", "portefeuilles", "evolution", "frais"];
 const DIRE_SESYON = 12 * 3600 * 1000;
@@ -97,7 +103,7 @@ const erèVerifye = (v: { rezon?: string; segond?: number }) =>
 
 // ---------- Airtable ----------
 const CHEMEN_LI = /^\/v0\/(meta\/bases(\/app[A-Za-z0-9]{14}\/tables)?|app[A-Za-z0-9]{14}\/[^/?#]+(\/rec[A-Za-z0-9]{14})?)(\?[^#]*)?$/;
-const CHEMEN_EKRI = /^\/v0\/(app[A-Za-z0-9]{14})\/[^/?#]+$/;
+const CHEMEN_EKRI = /^\/v0\/(app[A-Za-z0-9]{14}\/[^/?#]+)$/;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -145,7 +151,7 @@ Deno.serve(async (req) => {
         if (!CHEMEN_LI.test(chemen)) return rep(403, { error: { type: "CHEMIN_REFUSE", message: "Chemin Airtable non autorisé." } });
       } else if (metod === "PATCH") {
         const m = chemen.match(CHEMEN_EKRI);
-        if (!m || !BAZ_EKRI.has(m[1])) return rep(403, { error: { type: "ECRITURE_REFUSEE", message: "Écriture non autorisée sur cette base." } });
+        if (!m || !EKRI_OTORIZE.has(decodeURIComponent(m[1]))) return rep(403, { error: { type: "ECRITURE_REFUSEE", message: "Écriture non autorisée sur cette base." } });
       } else return rep(403, { error: { type: "METHODE_REFUSEE", message: "Méthode non autorisée." } });
       const r = await fetch(AT + chemen, {
         method: metod,
