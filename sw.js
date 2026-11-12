@@ -73,6 +73,8 @@ self.addEventListener("fetch", (e) => {
   // Supabase ak lòt sit: pa manyen yo, se aplikasyon an ki jere offline la.
   if (url.origin !== self.location.origin) return;
   if (SOU_TES && SOU_TES.some((x) => url.pathname.startsWith(x))) return;
+  // Tablo de bò a (tableau-de-bord/) se yon lòt aplikasyon: service worker sa a pa janm reponn pou li.
+  if (url.pathname.startsWith(new URL("tableau-de-bord/", self.registration.scope).pathname)) return;
   if (req.mode === "navigate") {
     e.respondWith(caches.match("index.html").then((r) => r || fetch(req)));
     return;
