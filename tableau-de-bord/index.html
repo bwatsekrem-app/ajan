@@ -1850,7 +1850,7 @@ async function fetchBaseParallel(baseId, tableId, fieldIds, baseFilter, splits, 
   await Promise.all(splits.map(s => fetchStream(baseId, tableId, fieldIds, `AND(${baseFilter},${s})`, onPage, sortField)));
 }
 // Forme normalisée d'un numéro de compte : sert à repérer « A-B SI-RD8668 » comme une variante de « A-BSI-RD8668 »
-function normCompte(s) { return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function normCompte(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 function extractSelectName(val) {
   if (val == null) return null;
   if (typeof val === 'string') return val;
@@ -3969,15 +3969,60 @@ const PF_INC_COLS = [
   { key: 'periode', label: 'Période' }, { key: 'th', label: 'Théorique', num: true },
 ];
 const PF_INC_LBL = { frappe: 'Numéro mal saisi', autre: 'Autre série (crédit / frais)', inconnu: 'Compte absent du registre' };
+// ---- Recherche du compte officiel probable : par numéro (faute de frappe), puis par chiffres et par nom du client.
+function _motsNom(n) {
+  return [...new Set(String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length >= 2))];
+}
+function _chiffres(c) { const m = String(c || '').match(/\d{4,}/g); return m ? m[m.length - 1] : null; }
+let _pfIdx = { ref: null };
+function pfIndexRegistre() {
+  if (_pfIdx.ref === REG_INFOS) return _pfIdx;
+  const parNom = new Map(), parMot = new Map(), parChiffres = new Map();
+  for (const c of REG_ACCOUNTS) {
+    const mots = _motsNom((REG_INFOS[c] || {}).nom);
+    if (mots.length) { const k = mots.slice().sort().join(' '); (parNom.get(k) || parNom.set(k, []).get(k)).push(c); }
+    for (const w of mots) (parMot.get(w) || parMot.set(w, []).get(w)).push(c);
+    const d = _chiffres(c); if (d) (parChiffres.get(d) || parChiffres.set(d, []).get(d)).push(c);
+  }
+  _pfIdx = { ref: REG_INFOS, parNom, parMot, parChiffres };
+  return _pfIdx;
+}
+function pfSuggerer(compte, nom) {
+  const n = normCompte(compte);
+  const direct = REG_NORM.get(n);
+  if (direct && direct !== compte) return { c: direct, pourquoi: 'même numéro mal tapé', sur: true, frappe: true };
+  const idx = pfIndexRegistre(), mots = _motsNom(nom), d = _chiffres(compte);
+  const communs = c => { const m = new Set(_motsNom((REG_INFOS[c] || {}).nom)); return mots.filter(w => m.has(w)).length; };
+  // 1) mêmes chiffres + au moins un mot du nom en commun
+  const parD = d ? (idx.parChiffres.get(d) || []) : [];
+  const dn = parD.filter(c => communs(c) >= 1);
+  if (dn.length === 1) return { c: dn[0], pourquoi: 'mêmes chiffres + même nom', sur: true };
+  // 2) exactement le même nom (mots dans n'importe quel ordre), un seul compte au registre
+  if (mots.length >= 2) {
+    const memeNom = idx.parNom.get(mots.slice().sort().join(' ')) || [];
+    if (memeNom.length === 1) return { c: memeNom[0], pourquoi: 'même nom', sur: true };
+    if (memeNom.length > 1) return { c: memeNom.join(' / '), pourquoi: `${memeNom.length} comptes au même nom`, sur: false, plusieurs: true };
+  }
+  // 3) mêmes chiffres, seul candidat
+  if (parD.length === 1) return { c: parD[0], pourquoi: 'mêmes chiffres, nom différent', sur: false };
+  // 4) nom proche : au moins 2 mots en commun, un seul candidat
+  if (mots.length >= 2) {
+    const score = new Map();
+    for (const w of mots) for (const c of (idx.parMot.get(w) || [])) score.set(c, (score.get(c) || 0) + 1);
+    const best = [...score.entries()].filter(([, v]) => v >= 2).sort((a, b) => b[1] - a[1]);
+    if (best.length === 1 || (best.length > 1 && best[0][1] > best[1][1])) return { c: best[0][0], pourquoi: 'nom proche', sur: false };
+  }
+  return null;
+}
 function pfInconnus() {
   const out = [];
   for (const [compte, acc] of Object.entries(DATA)) {
     if (REG_ACCOUNTS.has(compte)) continue;
-    const n = normCompte(compte);
-    const sugg = REG_NORM.get(n) && REG_NORM.get(n) !== compte ? REG_NORM.get(n) : null;
-    const cat = sugg ? 'frappe' : (/^(A-SC|SC-|FC)/i.test(compte.trim()) ? 'autre' : 'inconnu');
+    const sg = pfSuggerer(compte, acc.nom);
+    const sugg = sg && !sg.plusieurs ? sg.c : null;
+    const cat = sg && sg.frappe ? 'frappe' : (/^(A-SC|SC-|FC)/i.test(compte.trim()) ? 'autre' : 'inconnu');
     const tx = acc.tx;
-    out.push({ compte, cat, sugg, nom: acc.nom || '', collecteur: acc.collecteur_defaut || 'Non assigné', nbtx: tx.length,
+    out.push({ compte, cat, sugg, sg, nom: acc.nom || '', collecteur: acc.collecteur_defaut || 'Non assigné', nbtx: tx.length,
                premiere: tx.length ? tx[0].d : null, derniere: tx.length ? tx[tx.length - 1].d : null, th: tx.length ? tx[tx.length - 1].sc : 0 });
   }
   const ordre = { frappe: 0, inconnu: 1, autre: 2 };
@@ -4006,7 +4051,7 @@ function renderPfInconnus(tiles, body) {
       ${doublons ? `<div class="bad" style="padding-top:6px">${doublons} compte(s) en <b>double au registre avec deux collecteurs différents</b> : ${REG_DOUBLONS.slice(0, 8).map(d => `<span class="mono">${esc(d.compte)}</span> (${esc(d.a)} / ${esc(d.b)})`).join(' · ')}${doublons > 8 ? ' …' : ''}. Le premier lu est retenu ; à dédoublonner dans Airtable.</div>` : ''}
     </div>` : '';
   const v = c => ({ compte: `<span class="mono">${esc(c.compte)}</span>`, cat: `<span class="badge ${c.cat === 'frappe' ? 'bad' : c.cat === 'inconnu' ? 'unk' : ''}">${PF_INC_LBL[c.cat]}</span>`,
-    sugg: c.sugg ? `<span class="mono">${esc(c.sugg)}</span>` : '—', nom: esc(c.nom || 'Nom non disponible'), collecteur: esc(c.collecteur),
+    sugg: c.sg ? `<span class="mono">${esc(c.sg.c)}</span><div style="font-size:10.5px; font-weight:600; color:${c.sg.sur ? 'var(--green-dark)' : 'var(--amber)'};">${c.sg.sur ? '✓ ' : '? '}${esc(c.sg.pourquoi)}${(REG_INFOS[c.sg.c] || {}).nom ? ' · ' + esc(REG_INFOS[c.sg.c].nom) : ''}</div>` : '—', nom: esc(c.nom || 'Nom non disponible'), collecteur: esc(c.collecteur),
     nbtx: c.nbtx, periode: `${fmtDate(c.premiere)} → ${fmtDate(c.derniere)}`, th: fmtMoney(c.th) });
   const limit = PF.showAll ? Infinity : PF_SCREEN_LIMIT;
   const rows = shown.slice(0, limit === Infinity ? shown.length : limit);
