@@ -135,8 +135,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
   const idanEmail = (ident) => { const s = String(ident || "").trim(); if (s.includes("@")) return /^[^@\s]+@[^@\s]+$/.test(s) ? s.toLowerCase() : null; const t = telefon8(s); return t ? `509${t}@ajan.grandon.invalid` : null; };
   const prefiks = (s) => String(s ?? "").trim().replace(/^(a1|succu)\s*-\s*/i, "").trim();
 
-  let envK = "tes";
-  try { envK = localStorage.getItem("rapw_env") || "tes"; } catch (_) {}
+  let envK = "tes"; // vèsyon tès : baz tès sèlman
   $("env").value = envK;
   let sb = null, sess = null;
   const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null };

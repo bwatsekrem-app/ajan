@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="ht">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Rapwochman BSO</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--kat:#fff;--tx:#1d2330;--mut:#667085;--li:#e3e7ee;--pri:#1f5fbf;--ok:#11804a;--okb:#e7f6ee;--er:#c0262d;--erb:#fdecec;--av:#9a5b00;--avb:#fff4e0;--th:#eef2f8}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--kat:#1b2029;--tx:#e6e9ef;--mut:#9aa4b2;--li:#2c3340;--pri:#6ea2ff;--ok:#43c47f;--okb:#15301f;--er:#ff7a7f;--erb:#3a1a1c;--av:#f0b54d;--avb:#33270f;--th:#222937}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--kat);border-bottom:1px solid var(--li);position:sticky;top:0;z-index:5}
+h1{font-size:18px;margin:0}
+h2{font-size:15px;margin:0 0 8px}
+main{padding:16px;max-width:1400px;margin:auto}
+.kat{background:var(--kat);border:1px solid var(--li);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+input,select,button{font:inherit;padding:7px 10px;border:1px solid var(--li);border-radius:7px;background:var(--kat);color:var(--tx)}
+button{cursor:pointer}
+button.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.mut{color:var(--mut)}
+.env{font-size:12px;padding:3px 8px;border-radius:20px;font-weight:600}
+.env.tes{background:var(--avb);color:var(--av)}.env.prod{background:var(--erb);color:var(--er)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{border-radius:20px}
+.tabs button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--li);text-align:right;white-space:nowrap}
+th{background:var(--th);font-weight:600;position:sticky;top:0}
+th:first-child,td:first-child{text-align:left}
+tr.tot td{font-weight:700;border-top:2px solid var(--li)}
+tr.klik{cursor:pointer}tr.klik:hover td{background:var(--th)}
+.ekar{color:var(--er);font-weight:600;background:var(--erb)}
+.okc{color:var(--ok)}
+.na{color:var(--mut)}
+.chip{display:inline-block;padding:1px 7px;border-radius:12px;font-size:11px;font-weight:600}
+.chip.er{background:var(--erb);color:var(--er)}.chip.ok{background:var(--okb);color:var(--ok)}.chip.av{background:var(--avb);color:var(--av)}
+.prog{height:6px;background:var(--li);border-radius:4px;overflow:hidden;margin-top:8px}
+.prog>div{height:100%;background:var(--pri);width:0;transition:width .2s}
+.err{background:var(--erb);color:var(--er);padding:8px 10px;border-radius:7px;margin-top:8px;white-space:pre-wrap}
+.note{font-size:12px;color:var(--mut);margin-top:6px}
+dialog{border:1px solid var(--li);border-radius:12px;background:var(--kat);color:var(--tx);max-width:min(1100px,96vw);width:100%;padding:0}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog .tet{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--li)}
+dialog .ko{padding:14px;max-height:75vh;overflow:auto}
+.kol3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+@media print{header .row,.tabs,.noprint{display:none!important}body{background:#fff}.kat{border:none}}
+@media (max-width:600px){main{padding:10px}th,td{padding:5px 6px;font-size:13px}}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;gap:10px;align-items:center">
+    <h1>Rapwochman BSO</h1><span id="envChip" class="env prod">PWODIKSYON</span>
+  </div>
+  <div class="row">
+    <label>Baz Supabase<select id="env"><option value="prod">Pwodiksyon</option></select></label>
+    <span id="moun" class="mut"></span>
+    <button id="soti" hidden>Dekonekte</button>
+  </div>
+</header>
+<main>
+  <section id="login" class="kat" hidden>
+    <h2>Konekte (admin oswa manadjè)</h2>
+    <form id="fLogin" class="row">
+      <label>Telefòn oswa imèl<input name="email" type="text" inputmode="text" required autocomplete="username" placeholder="ex: 3700 0000"></label>
+      <label>Modpas<input name="pw" type="password" required autocomplete="current-password"></label>
+      <button class="pri">Konekte</button>
+    </form>
+    <div id="loginErr"></div>
+  </section>
+
+  <section id="app" hidden>
+    <div class="kat noprint">
+      <div class="row">
+        <label>Soti<input type="date" id="deb"></label>
+        <label>Rive<input type="date" id="fen"></label>
+        <button data-p="jodi">Jodi a</button><button data-p="yè">Yè</button><button data-p="sem">7 jou</button><button data-p="mwa">Mwa sa a</button>
+        <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="atant" checked>Konte depo an atant (poko valide)</label>
+        <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="gwoupe" checked>Mete A1-/Succu- ansanm ak ajan an</label>
+        <button class="pri" id="chaje">Chaje</button>
+      </div>
+      <div class="prog" id="prog" hidden><div></div></div>
+      <div id="eta" class="note"></div>
+      <div id="erè"></div>
+    </div>
+
+    <div class="tabs noprint" id="tabs">
+      <button data-t="jeneral" class="on">Total jeneral</button>
+      <button data-t="ajan">Pa ajan</button>
+      <button data-t="jou">Pa jou</button>
+      <button data-t="koresp">Ajan Airtable ↔ Supabase</button>
+      <span style="flex:1"></span>
+      <button id="csv">Ekspòte CSV</button><button id="enprime">Enprime</button>
+    </div>
+    <div id="vi"></div>
+  </section>
+</main>
+
+<dialog id="dlg"><div class="tet"><h2 id="dlgT"></h2><button id="dlgF">Fèmen</button></div><div class="ko" id="dlgK"></div></dialog>
+
+<script>
+(function () {
+  const ENV = {
+    tes:  { url: "https://riutfmqffpffniutbhue.supabase.co", key: "sb_publishable_p8aTqDgmHm7XvpkEjk7LiQ_X5QgwbfZ" },
+    prod: { url: "https://fdsuyqbscrnityotpmbc.supabase.co", key: "sb_publishable_a6JkadFn9ctIdCw7kBTPPw_7guHvavF" },
+  };
+  // Rubrik yo, nan lòd finans
+  const RUB = [
+    ["depot", "Depo"], ["retrait", "Retrè"], ["grandon", "Grandon (net)"], ["inscription", "Inscription"],
+    ["renouvellement", "Renouvellement"], ["nouveau_carnet", "Nouveau Carnet"], ["frais_service", "Frè sèvis (Nouveau Frais + Frais Auto)"],
+    ["frais", "Lòt frè"], ["virement", "Virement"], ["retour", "Retour"], ["credit", "Kredi"], ["konfyans", "Kredi Konfyans"],
+    ["electromenager", "Kredi Electromenager"], ["debloke", "Kredi Debloke"], ["fdk", "FDK-Konfyans"],
+    ["fonds_garantie", "Fonds Garantie"], ["monnaie", "Monnaie"], ["remise", "Remise"], ["dossier", "Dossier"], ["penalites", "Penalites"],
+  ];
+  const RUB_L = Object.fromEntries(RUB);
+  // Rubrik Supabase konnen (lòt yo pa sou app la : nou pa konpare yo ak Supabase)
+  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais", "virement"]);
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const nf = (v) => (v === null || v === undefined ? "—" : Math.round(v).toLocaleString("fr-FR").replace(/ /g, " "));
+  const fd = (s) => (s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "");
+  const jouAyiti = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Port-au-Prince" }).format(new Date());
+  const addJ = (s, n) => { const d = new Date(s + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const jouLis = (a, b) => { const o = []; for (let d = a; d <= b; d = addJ(d, 1)) o.push(d); return o; };
+  const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 -]/g, " ").replace(/\s+/g, " ").trim();
+  // Menm règ ak aplikasyon an : telefòn 8 chif → 509XXXXXXXX@ajan.grandon.invalid ; imèl la rete jan l ye
+  const telefon8 = (t) => { let d = String(t || "").replace(/\D/g, ""); if (d.length === 11 && d.startsWith("509")) d = d.slice(3); return /^\d{8}$/.test(d) ? d : null; };
+  const idanEmail = (ident) => { const s = String(ident || "").trim(); if (s.includes("@")) return /^[^@\s]+@[^@\s]+$/.test(s) ? s.toLowerCase() : null; const t = telefon8(s); return t ? `509${t}@ajan.grandon.invalid` : null; };
+  const prefiks = (s) => String(s ?? "").trim().replace(/^(a1|succu)\s*-\s*/i, "").trim();
+
+  let envK = "prod"; // vèsyon pwodiksyon : baz pwodiksyon sèlman
+  $("env").value = envK;
+  let sb = null, sess = null;
+  const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null };
+
+  function kreyeKlyan() {
+    sb = supabase.createClient(ENV[envK].url, ENV[envK].key, { auth: { storageKey: "rapw-" + envK } });
+    $("envChip").textContent = envK === "prod" ? "PWODIKSYON" : "TÈS";
+    $("envChip").className = "env " + (envK === "prod" ? "prod" : "tes");
+  }
+  async function kòmanse() {
+    kreyeKlyan();
+    const { data } = await sb.auth.getSession();
+    sess = data.session;
+    afiche();
+  }
+  function afiche() {
+    $("login").hidden = !!sess; $("app").hidden = !sess; $("soti").hidden = !sess;
+    $("moun").textContent = sess ? (sess.user.email || "").replace(/^509(\d{8})@ajan\.grandon\.invalid$/, "$1") : "";
+  }
+  $("env").onchange = async () => {
+    envK = $("env").value;
+    try { localStorage.setItem("rapw_env", envK); } catch (_) {}
+    st.done = null; st.imp = {}; $("vi").innerHTML = "";
+    await kòmanse();
+  };
+  $("fLogin").onsubmit = async (e) => {
+    e.preventDefault();
+    $("loginErr").innerHTML = "";
+    const f = e.target;
+    const email = idanEmail(f.email.value);
+    if (!email) { $("loginErr").innerHTML = `<div class="err">Tape 8 chif telefòn ou (oswa imèl ou si w se administratè).</div>`; return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: f.pw.value });
+    if (error) { $("loginErr").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    sess = data.session; afiche();
+  };
+  $("soti").onclick = async () => { await sb.auth.signOut(); sess = null; afiche(); };
+
+  // Peryòd
+  const jodi = jouAyiti();
+  $("deb").value = addJ(jodi, -1); $("fen").value = addJ(jodi, -1);
+  document.querySelectorAll("[data-p]").forEach((b) => (b.onclick = () => {
+    const p = b.dataset.p, t = jouAyiti();
+    if (p === "jodi") { $("deb").value = t; $("fen").value = t; }
+    if (p === "yè") { $("deb").value = addJ(t, -1); $("fen").value = addJ(t, -1); }
+    if (p === "sem") { $("deb").value = addJ(t, -6); $("fen").value = t; }
+    if (p === "mwa") { $("deb").value = t.slice(0, 8) + "01"; $("fen").value = t; }
+  }));
+
+  async function fn(body) {
+    const { data: s } = await sb.auth.getSession();
+    if (!s.session) throw new Error("Sesyon an fini : konekte ankò");
+    const r = await fetch(ENV[envK].url + "/functions/v1/rapwochman-bso", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + s.session.access_token, apikey: ENV[envK].key },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({ error: "Repons envalid (" + r.status + ")" }));
+    if (!r.ok || j.error) throw new Error(j.error || "Erè " + r.status);
+    return j;
+  }
+  async function fnReseye(body, n = 3) {
+    for (let i = 0; ; i++) {
+      try { return await fn(body); } catch (e) {
+        if (i >= n - 1 || /Aksè|konekte|Sekrè/.test(e.message)) throw e;
+        await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+      }
+    }
+  }
+
+  $("chaje").onclick = async () => {
+    const deb = $("deb").value, fen = $("fen").value;
+    if (!deb || !fen || fen < deb) return alert("Peryòd la pa bon");
+    const jous = jouLis(deb, fen);
+    if (jous.length > 31) return alert("Maksimòm 31 jou alafwa");
+    $("chaje").disabled = true; $("erè").innerHTML = ""; st.err = [];
+    const pb = $("prog"); pb.hidden = false; pb.firstElementChild.style.width = "0";
+    try {
+      $("eta").textContent = "Supabase…";
+      const { data, error } = await sb.rpc("rapw_sentez", { p_deb: deb, p_fen: fen });
+      if (error) throw new Error(error.message);
+      st.done = data; st.imp = {};
+      let fèt = 0;
+      for (const j of jous) {
+        $("eta").textContent = `Airtable ${fd(j)} (${fèt + 1}/${jous.length})…`;
+        try { st.imp[j] = await fnReseye({ aksyon: "sentez", jou: j }); }
+        catch (e) { st.err.push(`${fd(j)} : ${e.message}`); if (/Aksè|konekte|Sekrè/.test(e.message)) break; }
+        fèt++; pb.firstElementChild.style.width = Math.round((fèt / jous.length) * 100) + "%";
+      }
+      $("eta").textContent = `Chaje : ${fd(deb)} → ${fd(fen)} · ${jous.length} jou`;
+    } catch (e) { st.err.push(e.message); $("eta").textContent = ""; }
+    $("erè").innerHTML = st.err.length ? `<div class="err">${esc(st.err.join("\n"))}</div>` : "";
+    $("chaje").disabled = false; setTimeout(() => (pb.hidden = true), 600);
+    rann();
+  };
+
+  // ---------- Kalkil ----------
+  function kleKolekte(nomAt) { return $("gwoupe").checked ? prefiks(nomAt) : String(nomAt).trim(); }
+  // Itilizatè Supabase → kle kolektè (non Airtable)
+  function mapAjan(kles) {
+    const m = {}, D = st.done;
+    const man = {};
+    for (const x of D.map || []) man[x.u] = kleKolekte(x.a);
+    const kn = kles.map((k) => ({ k, w: norm(k).split(" ").filter(Boolean) }));
+    for (const a of D.ajan || []) {
+      if (man[a.u]) { m[a.u] = man[a.u]; continue; }
+      const w = new Set(norm(a.non).split(" "));
+      const bon = kn.filter((x) => x.w.length && x.w.every((t) => w.has(t))).sort((p, q) => q.w.length - p.w.length)[0];
+      m[a.u] = bon ? bon.k : a.non || a.u.slice(0, 8);
+    }
+    return m;
+  }
+  function kalkile() {
+    const D = st.done; if (!D) return null;
+    const atant = $("atant").checked;
+    // A[jou][kolektè][rub] = {s, sa, i, ni, d}
+    const A = {};
+    const cel = (j, k, r) => (((A[j] = A[j] || {})[k] = A[j][k] || {})[r] = A[j][k][r] || { s: 0, sa: 0, ns: 0, i: 0, ni: 0, d: 0, nd: 0 });
+    const kles = new Set();
+    for (const [j, x] of Object.entries(st.imp)) {
+      for (const k of Object.keys(x.imp || {})) kles.add(kleKolekte(k));
+      for (const k of Object.keys(x.dec || {})) kles.add(kleKolekte(k));
+    }
+    const um = mapAjan([...kles]);
+    const sbKolekte = new Set();
+    for (const t of D.tx || []) {
+      const k = um[t.u] || "(san ajan)"; sbKolekte.add(k);
+      const c = cel(t.j, k, t.r);
+      if (t.s === "pending") { c.sa += t.m; if (atant) c.ns += t.n; }
+      else { c.s += t.m; c.ns += t.n; }
+    }
+    const meta = {};
+    for (const [j, x] of Object.entries(st.imp)) {
+      for (const [kA, rubs] of Object.entries(x.imp || {})) {
+        const k = kleKolekte(kA);
+        for (const [r, v] of Object.entries(rubs)) { const c = cel(j, k, r); c.i += v.m; c.ni += v.n; }
+        const mm = ((meta[j] = meta[j] || {})[k] = meta[j][k] || { non: new Set(), err: 0, rapo: 0, cash: 0, encaisse: 0, doublon: 0 });
+        mm.non.add(kA); mm.err += (x.imp_erronees || {})[kA] || 0;
+      }
+      for (const [kA, rubs] of Object.entries(x.dec || {})) {
+        const k = kleKolekte(kA);
+        const mm = ((meta[j] = meta[j] || {})[k] = meta[j][k] || { non: new Set(), err: 0, rapo: 0, cash: 0, encaisse: 0, doublon: 0 });
+        mm.non.add(kA); mm.rapo += rubs._rapo || 0; mm.cash += rubs._cash || 0; mm.encaisse += rubs._encaisse || 0; mm.doublon += rubs._doublon || 0;
+        for (const [r, v] of Object.entries(rubs)) if (!r.startsWith("_")) { const c = cel(j, k, r); c.d += v; c.nd++; }
+      }
+    }
+    return { A, meta, um, sbKolekte, atant, jous: Object.keys(st.imp).sort() };
+  }
+  const sbV = (c, atant) => c.s + (atant ? c.sa : 0);
+  function sòm(list) {
+    const o = { s: 0, sa: 0, ns: 0, i: 0, ni: 0, d: 0, nd: 0 };
+    for (const c of list) if (c) for (const k in o) o[k] += c[k] || 0;
+    return o;
+  }
+
+  // ---------- Afichaj ----------
+  function ekarCel(a, b, konpare = true) {
+    if (!konpare || a === null || b === null) return `<td class="na">—</td>`;
+    const d = Math.round(a - b);
+    return d === 0 ? `<td class="okc">0</td>` : `<td class="ekar">${d > 0 ? "+" : ""}${nf(d)}</td>`;
+  }
+  function rann() {
+    document.querySelectorAll("#tabs [data-t]").forEach((b) => b.classList.toggle("on", b.dataset.t === st.tab));
+    const K = kalkile();
+    if (!K) { $("vi").innerHTML = `<div class="kat mut">Chwazi yon peryòd epi klike « Chaje ».</div>`; return; }
+    st.K = K;
+    ({ jeneral: vJeneral, ajan: vAjan, jou: vJou, koresp: vKoresp })[st.tab](K);
+  }
+  function antet(sbOk = true) {
+    return `<tr><th></th><th title="Tranzaksyon valide (Kès)">Supabase valide</th><th title="Depo poko valide pa Kès">Supabase an atant</th>
+      <th>Importation Globale</th><th>Declaration Agent</th><th title="Supabase − Importation">Ekar Supabase − Importation</th>
+      <th title="Importation − Declaration">Ekar Importation − Declaration</th></tr>`;
+  }
+  function liy(lab, c, sbKonpare, atr = "") {
+    const s = sbKonpare ? sbV(c, st.K.atant) : null;
+    return `<tr ${atr}><td>${lab}</td><td>${sbKonpare ? nf(c.s) : '<span class="na">—</span>'}</td><td>${sbKonpare ? nf(c.sa) : '<span class="na">—</span>'}</td>
+      <td>${nf(c.i)}</td><td>${nf(c.d)}</td>${ekarCel(s, c.i, sbKonpare)}${ekarCel(c.i, c.d)}</tr>`;
+  }
+  function vJeneral(K) {
+    // Supabase konpare sèlman pou kolektè ki sou app la
+    const rows = RUB.map(([r, l]) => {
+      const all = [], sbOnly = [];
+      for (const j of Object.keys(K.A)) for (const [k, rr] of Object.entries(K.A[j])) {
+        if (rr[r]) { all.push(rr[r]); if (K.sbKolekte.has(k)) sbOnly.push(rr[r]); }
+      }
+      const t = sòm(all), ts = sòm(sbOnly);
+      return { r, l, t, ts, vid: !t.s && !t.sa && !t.i && !t.d };
+    }).filter((x) => !x.vid);
+    const kol = [...K.sbKolekte].sort();
+    let h = `<div class="kat"><h2>Total jeneral · tout ajan</h2><div class="wrap"><table>${antet()}`;
+    for (const x of rows) h += liy(RUB_L[x.r], x.t, false, `class="klik" data-rub="${x.r}"`);
+    h += `</table></div><div class="note">Kolòn Supabase yo vid isit la paske se pa tout ajan ki sou app la. Gade tablo anba a pou ajan ki sou Supabase yo.</div></div>`;
+    h += `<div class="kat"><h2>Ajan ki sou app la (Supabase) · ${kol.map(esc).join(", ") || "okenn"}</h2><div class="wrap"><table>${antet()}`;
+    for (const x of rows) if (RUB_SB.has(x.r) || x.ts.s || x.ts.sa) {
+      const c = {}; const o = sòm([]);
+      for (const j of Object.keys(K.A)) for (const k of kol) { const v = K.A[j][k]?.[x.r]; if (v) for (const z in o) o[z] += v[z] || 0; }
+      h += liy(RUB_L[x.r], o, RUB_SB.has(x.r), `class="klik" data-rub="${x.r}"`);
+    }
+    h += `</table></div><div class="note">${K.atant ? "Depo an atant yo konte nan ekar la (ajan an deja touche kòb la)." : "Depo an atant yo pa konte nan ekar la."} Klike sou yon rubrik pou wè l pa ajan.</div></div>`;
+    $("vi").innerHTML = h;
+    $("vi").querySelectorAll("[data-rub]").forEach((tr) => (tr.onclick = () => { st.rubAjan = tr.dataset.rub; st.tab = "ajan"; rann(); }));
+  }
+  function totAjan(K, r) {
+    const T = {};
+    for (const j of Object.keys(K.A)) for (const [k, rr] of Object.entries(K.A[j])) {
+      const o = (T[k] = T[k] || sòm([]));
+      const v = rr[r]; if (v) for (const z in o) o[z] += v[z] || 0;
+    }
+    return T;
+  }
+  function vAjan(K) {
+    const r = st.rubAjan, T = totAjan(K, r);
+    const ks = Object.keys(T).filter((k) => T[k].s || T[k].sa || T[k].i || T[k].d || K.sbKolekte.has(k)).sort((a, b) => a.localeCompare(b));
+    const opt = RUB.map(([x, l]) => `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}</option>`).join("");
+    let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa ajan · ${esc(RUB_L[r])}</h2>
+      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet()}`;
+    const tot = sòm([]);
+    for (const k of ks) {
+      const c = T[k]; for (const z in tot) tot[z] += c[z];
+      const sbK = K.sbKolekte.has(k) && RUB_SB.has(r);
+      const m = Object.values(K.meta).map((x) => x[k]).filter(Boolean);
+      const err = m.reduce((a, x) => a + x.err, 0), dbl = m.reduce((a, x) => a + x.doublon, 0), rapo = m.reduce((a, x) => a + x.rapo, 0);
+      const chips = (sbK ? ` <span class="chip ok">app</span>` : "") + (err ? ` <span class="chip er" title="Liy make Erronees nan Importation">${err} erè</span>` : "")
+        + (dbl ? ` <span class="chip av" title="Rapò make Doublon">${dbl} doublon</span>` : "") + (!rapo && c.i ? ` <span class="chip av" title="Pa gen rapò nan Declaration Agent">san rapò</span>` : "");
+      h += liy(esc(k) + chips, c, sbK, `class="klik" data-k="${esc(k)}"`);
+    }
+    h += liy("TOTAL", tot, false, 'class="tot"').replace("<tr ", "<tr ");
+    h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
+    $("vi").innerHTML = h;
+    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
+    $("vi").querySelectorAll("[data-k]").forEach((tr) => (tr.onclick = () => ouvriAjan(tr.dataset.k)));
+  }
+  function vJou(K) {
+    const r = st.rubAjan;
+    const opt = RUB.map(([x, l]) => `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}</option>`).join("");
+    let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa jou · ${esc(RUB_L[r])} (ajan ki sou app la)</h2>
+      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet()}`;
+    for (const j of K.jous) {
+      const lst = [...K.sbKolekte].map((k) => K.A[j]?.[k]?.[r]).filter(Boolean);
+      h += liy(fd(j), sòm(lst), RUB_SB.has(r));
+    }
+    h += `</table></div></div>`;
+    $("vi").innerHTML = h;
+    $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); };
+  }
+  function vKoresp(K) {
+    const D = st.done;
+    const kles = new Set(); for (const x of Object.values(st.imp)) { Object.keys(x.imp || {}).forEach((k) => kles.add(k)); Object.keys(x.dec || {}).forEach((k) => kles.add(k)); }
+    const uAvèk = new Set((D.tx || []).map((t) => t.u));
+    const ajan = (D.ajan || []).filter((a) => uAvèk.has(a.u) || (D.map || []).some((m) => m.u === a.u));
+    const opt = (sel) => `<option value="">(otomatik)</option>` + [...kles].sort().map((k) => `<option ${k === sel ? "selected" : ""}>${esc(k)}</option>`).join("");
+    const man = Object.fromEntries((D.map || []).map((m) => [m.u, m.a]));
+    let h = `<div class="kat"><h2>Ajan Supabase → non kolektè Airtable</h2><div class="wrap"><table><tr><th>Itilizatè Supabase</th><th>Kolektè Airtable (rekonèt)</th><th>Chwazi alamen</th></tr>`;
+    for (const a of ajan) h += `<tr><td>${esc(a.non)}</td><td>${esc(K.um[a.u] || "")}</td><td><select data-u="${a.u}" data-old="${esc(man[a.u] || "")}">${opt(man[a.u] || "")}</select></td></tr>`;
+    h += `</table></div><div class="note">Sistèm nan rekonèt ajan an otomatikman lè non Airtable la (san A1-/Succu-) parèt nan non Supabase la. Si li pa bon, chwazi non an alamen.</div></div>`;
+    $("vi").innerHTML = h;
+    $("vi").querySelectorAll("select[data-u]").forEach((s) => (s.onchange = async () => {
+      const nom = s.value || s.dataset.old;
+      const { error } = await sb.rpc("rapw_ajan_mete", { p_nom: nom, p_user: s.value ? s.dataset.u : null });
+      if (error) return alert(error.message);
+      const r = await sb.rpc("rapw_sentez", { p_deb: st.done.deb, p_fen: st.done.fen });
+      if (!r.error) st.done = r.data;
+      rann();
+    }));
+  }
+
+  // ---------- Detay yon ajan ----------
+  function ouvriAjan(k) {
+    const K = st.K;
+    const sbK = K.sbKolekte.has(k);
+    const rubs = RUB.filter(([r]) => K.jous.some((j) => K.A[j]?.[k]?.[r]));
+    let h = `<div class="wrap"><table><tr><th>Jou</th><th>Rubrik</th><th>Supabase valide</th><th>An atant</th><th>Importation</th><th>Declaration</th><th>Ekar Sup − Imp</th><th>Ekar Imp − Dec</th><th></th></tr>`;
+    for (const j of K.jous) for (const [r, l] of rubs) {
+      const c = K.A[j]?.[k]?.[r]; if (!c) continue;
+      const sk = sbK && RUB_SB.has(r);
+      const s = sk ? sbV(c, K.atant) : null;
+      h += `<tr><td>${fd(j)}</td><td style="text-align:left">${esc(l)}</td><td>${sk ? nf(c.s) : "—"}</td><td>${sk ? nf(c.sa) : "—"}</td><td>${nf(c.i)}</td><td>${nf(c.d)}</td>
+        ${ekarCel(s, c.i, sk)}${ekarCel(c.i, c.d)}<td>${sk && Math.round(s - c.i) ? `<button data-j="${j}">Wè liy yo</button>` : ""}</td></tr>`;
+    }
+    h += `</table></div>`;
+    const m = Object.entries(K.meta).map(([j, x]) => x[k] && `${fd(j)} : ${[...x[k].non].join(", ")}${x[k].rapo ? ` · Cash deklare ${nf(x[k].cash)} · Encaisse ${nf(x[k].encaisse)}` : " · pa gen rapò"}`).filter(Boolean);
+    h += `<div class="note">${m.map(esc).join("<br>")}</div><div id="liyDet"></div>`;
+    $("dlgT").textContent = k; $("dlgK").innerHTML = h; $("dlg").showModal();
+    $("dlgK").querySelectorAll("[data-j]").forEach((b) => (b.onclick = () => liyYo(k, b.dataset.j)));
+  }
+  // Konpare liy pa liy (kont + rubrik + montan)
+  async function liyYo(k, j) {
+    const box = $("liyDet"); box.innerHTML = `<div class="note">Ap chaje liy yo…</div>`;
+    try {
+      const K = st.K;
+      const uids = Object.entries(K.um).filter(([, v]) => v === k).map(([u]) => u);
+      const nonAt = [...(K.meta[j]?.[k]?.non || [k])];
+      const [s, a] = await Promise.all([sb.rpc("rapw_detay", { p_jou: j, p_uids: uids }), fnReseye({ aksyon: "detay", jou: j, kolekte: nonAt })]);
+      if (s.error) throw new Error(s.error.message);
+      const S = (s.data || []).filter((x) => RUB_SB.has(x.rub) && (K.atant || x.st !== "pending"))
+        .map((x) => ({ kont: (x.kod || x.no_compte || "").trim(), rub: x.rub, m: x.rub === "grandon" && x.tip !== "D" ? -x.montan : x.montan, x }));
+      const I = []; for (const l of a.liy) for (const [r, v] of Object.entries(l.v)) if (RUB_SB.has(r)) I.push({ kont: String(l.kont || "").trim(), rub: r, m: v, l });
+      const kle = (o) => `${o.kont}|${o.rub}|${Math.round(o.m)}`;
+      const pool = {}; for (const o of I) (pool[kle(o)] = pool[kle(o)] || []).push(o);
+      const sèlSb = [], matche = [];
+      for (const o of S) { const p = pool[kle(o)]; if (p && p.length) matche.push([o, p.shift()]); else sèlSb.push(o); }
+      const sèlI = Object.values(pool).flat();
+      const t = (lst, kol) => lst.length ? `<table><tr><th>Kont</th><th>Rubrik</th><th>Montan</th><th>${kol}</th></tr>${lst.map((o) => `<tr><td>${esc(o.kont)}</td><td>${esc(RUB_L[o.rub])}</td><td>${nf(o.m)}</td><td>${o.x ? esc(o.x.kliyan) + (o.x.st === "pending" ? ' <span class="chip av">an atant</span>' : "") : esc(o.l.non || "") + (o.l.erronees ? ' <span class="chip er">Erronees</span>' : "")}</td></tr>`).join("")}</table>` : `<div class="note okc">Okenn</div>`;
+      box.innerHTML = `<h2 style="margin-top:14px">Liy yo · ${fd(j)} · ${matche.length} liy matche</h2><div class="kol3">
+        <div><h2 class="mut">Sèlman sou Supabase (${sèlSb.length})</h2>${t(sèlSb, "Kliyan")}</div>
+        <div><h2 class="mut">Sèlman nan Importation Globale (${sèlI.length})</h2>${t(sèlI, "Kliyan")}</div></div>
+        ${a.koupe ? '<div class="err">Twòp liy : lis Importation an koupe.</div>' : ""}`;
+    } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+  }
+  $("dlgF").onclick = () => $("dlg").close();
+
+  // ---------- Onglè, CSV, enprime ----------
+  document.querySelectorAll("#tabs [data-t]").forEach((b) => (b.onclick = () => { st.tab = b.dataset.t; rann(); }));
+  $("atant").onchange = rann; $("gwoupe").onchange = rann;
+  $("enprime").onclick = () => window.print();
+  $("csv").onclick = () => {
+    const t = $("vi").querySelector("table"); if (!t) return;
+    const rows = [...$("vi").querySelectorAll("table")].flatMap((tb) => [...tb.rows].map((r) => [...r.cells].map((c) => '"' + c.innerText.replace(/"/g, '""').replace(/\s+/g, " ").trim() + '"').join(";")));
+    const blob = new Blob(["﻿" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `rapwochman-${st.tab}-${$("deb").value}_${$("fen").value}.csv`; a.click();
+  };
+
+  kòmanse();
+})();
+</script>
+</body>
+</html>
