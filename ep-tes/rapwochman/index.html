@@ -402,8 +402,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
     h += `</table></div><div class="note">Sistèm nan rekonèt ajan an otomatikman lè non Airtable la (san A1-/Succu-) parèt nan non Supabase la. Si li pa bon, chwazi non an alamen.</div></div>`;
     $("vi").innerHTML = h;
     $("vi").querySelectorAll("select[data-u]").forEach((s) => (s.onchange = async () => {
-      const nom = s.value || s.dataset.old;
-      const { error } = await sb.rpc("rapw_ajan_mete", { p_nom: nom, p_user: s.value ? s.dataset.u : null });
+      const { error } = await sb.rpc("rapw_ajan_konekte", { p_user: s.dataset.u, p_nom: s.value || null });
       if (error) return alert(error.message);
       const r = await sb.rpc("rapw_sentez", { p_deb: st.done.deb, p_fen: st.done.fen });
       if (!r.error) st.done = r.data;
@@ -468,7 +467,7 @@ dialog .ko{padding:14px;max-height:75vh;overflow:auto}
       for (const t of tx) {
         const st = t.rec ? '<span class="chip ok">nan Airtable</span>' : t.v8 ? '<span class="chip ok">voye pa v8</span>' : '<span class="chip av">poko</span>';
         h += `<tr><td>${!t.rec && !t.v8 ? `<input type="checkbox" class="syC" value="${t.id}">` : ""}</td><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(t.kliyan)}</td>
-          <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${nf(t.solde)}</td><td style="text-align:left">${esc(t.kolekte || "")}</td><td>${st}</td></tr>`;
+          <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${nf(t.solde)}</td><td style="text-align:left">${t.kolekte ? esc(t.kolekte) : '<span class="chip av" title="Itilizatè Supabase sa a pa konekte ak yon non kolektè Airtable : liy lan ap ale san kolektè. Konekte l nan onglè « Ajan Airtable ↔ Supabase ».">san kolektè</span>'}</td><td>${st}</td></tr>`;
       }
       h += `</table></div>`;
     }
