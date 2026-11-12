@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src https://api.airtable.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src https://fdsuyqbscrnityotpmbc.supabase.co; base-uri 'none'; form-action 'none'">
 <title>Bwat Sekrèm — Tableau de bord Épargne</title>
 <style>
   :root {
@@ -389,7 +389,9 @@
     <div class="err" id="loginErr"></div>
     <button class="primary block" onclick="doLogin()">Se connecter</button>
     <div id="setupBox" style="display:none;">
-      <p class="muted" style="margin:0 0 8px;">Première installation sur ce navigateur : crée le compte administrateur (12 caractères minimum).</p>
+      <p class="muted" style="margin:0 0 8px;">Première installation : crée le compte administrateur (mot de passe de 12 caractères minimum). Le code d'installation t'a été remis séparément ; il ne fonctionne qu'une fois.</p>
+      <label class="field">Code d'installation</label>
+      <input type="text" id="setupKod" autocomplete="off" placeholder="XXXX-XXXX-XXXX">
       <label class="field">Nom de l'administrateur</label>
       <input type="text" id="setupUser" autocomplete="username" value="Admin">
       <label class="field">Mot de passe</label>
@@ -401,7 +403,6 @@
     </div>
     <div id="loginConn"></div>
     <div class="login-help">
-      <button class="linkbtn" onclick="openLoginToken()">🔑 Code d'accès (jeton Airtable)</button>
       <button class="linkbtn" onclick="openLoginReset()">♻️ Réinitialiser le fichier</button>
     </div>
   </div>
@@ -490,11 +491,8 @@
       <div class="settings-grid">
         <div class="card">
           <h3>Jeton Airtable</h3>
-          <p class="muted" style="margin-top:0;">Seul endroit où le jeton peut être saisi. Conservé dans ce navigateur, envoyé uniquement à api.airtable.com. Scopes recommandés : <b>data.records:read</b> et <b>schema.bases:read</b> (lecture du schéma de chaque base mensuelle).</p>
-          <label class="field">Jeton d'accès personnel</label>
-          <input type="password" id="tokenInput" placeholder="patXXXXXXXXXXXXXX.xxxxxxxx…">
+          <p class="muted" style="margin-top:0;">Le jeton n'est plus saisi dans le navigateur : il est conservé sur le serveur (Supabase, secret <b class="mono">TABLO_AIRTABLE_TOKEN</b>) et n'est jamais envoyé aux postes. Pour le remplacer : Supabase → Edge Functions → Secrets.</p>
           <div class="note" id="tokenState"></div>
-          <button class="primary block" onclick="saveToken()">Enregistrer le jeton</button>
         </div>
         <div class="card">
           <h3>Synchronisation</h3>
@@ -595,9 +593,10 @@
       <div class="card">
         <h3>Utilisateurs</h3>
         <table class="users"><thead><tr><th>Nom</th><th>Accès</th><th style="text-align:right;">Actions</th></tr></thead><tbody id="usersBody"></tbody></table>
+        <div id="oldUsersBox"></div>
         <div style="border-top:1px solid var(--border); margin-top:16px; padding-top:12px;">
           <h3 id="userFormTitle">Ajouter un utilisateur</h3>
-          <input type="hidden" id="uEditName">
+          <input type="hidden" id="uEditName"><input type="hidden" id="uKeepUid">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
             <div><label class="field">Nom d'utilisateur <span id="uNameHint" style="font-weight:400; color:var(--muted);"></span></label><input type="text" id="uName" autocomplete="off"></div>
             <div><label class="field">Mot de passe <span id="uPassHint" style="font-weight:400; color:var(--muted);"></span></label><input type="password" id="uPass" autocomplete="new-password"></div>
@@ -767,13 +766,18 @@ let CURRENT_USER = null;
 
 function loadConfig() {
   try { const raw = localStorage.getItem(CONFIG_KEY); if (raw) CONFIG = Object.assign({ users: [], token: '', printCodes: {} }, JSON.parse(raw)); } catch {}
-  if (CONFIG.token && CONFIG.token.startsWith('b64:')) { try { CONFIG.token = atob(CONFIG.token.slice(4)); } catch {} }
-  // Plus de mot de passe par défaut : à la première ouverture, l'écran « Première installation » demande de créer l'administrateur.
+  // Les comptes et le jeton sont désormais sur le serveur : on efface ceux de ce poste (on garde nom/ID/rôle pour pouvoir les recréer).
+  if ((CONFIG.users || []).length) {
+    const old = CONFIG.users.filter(u => u && u.name).map(u => ({ name: u.name, uid: u.uid || '', role: u.role || (u.admin ? 'admin' : 'traitement'), pages: u.pages || [] }));
+    try { const prev = anciensComptes(); for (const o of old) if (!prev.some(x => x.uid === o.uid && x.name === o.name)) prev.push(o); localStorage.setItem('bwat_anciens_comptes', JSON.stringify(prev)); } catch {}
+  }
+  const hadLocal = (CONFIG.users || []).length || CONFIG.token;
+  CONFIG.users = []; CONFIG.token = '';
   // Identifiant permanent par utilisateur (ne change jamais, même si le nom est modifié) — migration des anciens comptes
   let changed = false;
   for (const u of CONFIG.users) { if (!u.uid) { u.uid = newUid(); changed = true; } if (!u.role) { u.role = u.admin ? 'admin' : 'traitement'; changed = true; } }
   if (!CONFIG.caisses) { CONFIG.caisses = [{ prefix: 'A1', label: 'Caisse Point A1' }, { prefix: 'Succu', label: 'Caisse Succursale' }]; changed = true; }
-  if (changed) saveConfig();
+  if (changed || hadLocal) saveConfig();
 }
 function newUid() { const used = new Set(CONFIG.users.map(u => u.uid)); let id; do { id = 'U-' + Array.from(crypto.getRandomValues(new Uint8Array(2))).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase(); } while (used.has(id)); return id; }
 // Identifiant permanent de ce poste (navigateur) : généré une fois, conservé dans le stockage local
@@ -783,17 +787,62 @@ function deviceId() {
 function userLabel(u) { return u ? `${u.name} [${u.uid || '?'}]` : ''; }
 function saveConfig() {
   const copy = JSON.parse(JSON.stringify(CONFIG));
-  if (copy.token) copy.token = 'b64:' + btoa(copy.token);
+  delete copy.token; delete copy.users; // jamais stockés sur le poste
   try { localStorage.setItem(CONFIG_KEY, JSON.stringify(copy)); } catch (e) { alert('Impossible d\'enregistrer la configuration : ' + e.message); }
 }
 function findUser(name) { const n = (name || '').trim().toLowerCase(); return CONFIG.users.find(u => u.name.toLowerCase() === n) || null; }
 function userCanSee(u, pageId) { return !!u && (u.admin || (u.pages || []).includes(pageId)); }
 
+// ============ SERVEUR (Supabase) : comptes + pont Airtable ============
+// Le jeton Airtable reste sur le serveur. Toute requête vers api.airtable.com est redirigée vers la fonction « tablo »,
+// qui vérifie la session, n'autorise que les lectures (et les écritures sur la base des pointages/frais) puis répond comme Airtable.
+const TABLO_API = 'https://fdsuyqbscrnityotpmbc.supabase.co/functions/v1/tablo';
+let SESYON = null; try { SESYON = sessionStorage.getItem('bwat_sesyon'); } catch {}
+const _fetchNatif = window.fetch.bind(window);
+function setSesyon(t) { SESYON = t || null; try { if (t) sessionStorage.setItem('bwat_sesyon', t); else sessionStorage.removeItem('bwat_sesyon'); } catch {} }
+let _sesyonFiniEnCours = false;
+function sesyonFini() {
+  if (_sesyonFiniEnCours || !CURRENT_USER) return;
+  _sesyonFiniEnCours = true;
+  try { doLogout(); } finally { _sesyonFiniEnCours = false; }
+  const e = document.getElementById('loginErr'); if (e) e.textContent = 'Session expirée — reconnecte-toi.';
+}
+async function tablo(aksyon, data) {
+  let r;
+  try {
+    r = await _fetchNatif(TABLO_API, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, SESYON ? { 'x-tablo-sesyon': SESYON } : {}),
+      body: JSON.stringify(Object.assign({ aksyon }, data || {})) });
+  } catch (e) { throw new Error('Serveur injoignable — vérifie la connexion Internet.'); }
+  let j = {}; try { j = await r.json(); } catch {}
+  if (r.status === 401 && j.sesyon_fini) { sesyonFini(); throw new Error(j['erè'] || 'Session expirée'); }
+  if (!r.ok) throw new Error(j['erè'] || ('Erreur serveur ' + r.status));
+  return j;
+}
+window.fetch = async function (input, init) {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (!url.startsWith('https://api.airtable.com/')) return _fetchNatif(input, init);
+  init = init || {};
+  const r = await _fetchNatif(TABLO_API, { method: 'POST', signal: init.signal,
+    headers: { 'Content-Type': 'application/json', 'x-tablo-sesyon': SESYON || '' },
+    body: JSON.stringify({ aksyon: 'airtable', metod: init.method || 'GET', chemen: url.slice('https://api.airtable.com'.length), ko: init.body }) });
+  if (r.status === 401) { try { const j = await r.clone().json(); if (j.sesyon_fini) sesyonFini(); } catch {} }
+  return r;
+};
+// Session ouverte : profil + liste des utilisateurs viennent du serveur ; « serveur » remplace le jeton local.
+function ouvrirSession(j) {
+  if (j.sesyon) setSesyon(j.sesyon);
+  CONFIG.users = j.itilizate || [];
+  CONFIG.token = 'serveur'; if (typeof TOKEN !== 'undefined') TOKEN = 'serveur';
+  CURRENT_USER = findUser(j.mwen.name) || j.mwen;
+}
+function anciensComptes() { try { return JSON.parse(localStorage.getItem('bwat_anciens_comptes') || '[]'); } catch { return []; } }
+
 // ============ CONNEXION ============
 function loginLock() { try { return JSON.parse(localStorage.getItem('bwat_login_lock') || '{}'); } catch { return {}; } }
 function saveLoginLock(o) { try { localStorage.setItem('bwat_login_lock', JSON.stringify(o)); } catch {} }
-function showSetupIfNeeded() {
-  const need = !CONFIG.users.length;
+async function showSetupIfNeeded() {
+  let need = false;
+  try { need = !(await tablo('eta')).gen_itilizate; } catch (e) { const el = document.getElementById('loginErr'); if (el) el.textContent = e.message; }
   const card = document.querySelector('#loginScreen .login-card');
   for (const id of ['loginUser', 'loginPass']) { const el = document.getElementById(id); el.style.display = need ? 'none' : ''; if (el.previousElementSibling && el.previousElementSibling.tagName === 'LABEL') el.previousElementSibling.style.display = need ? 'none' : ''; }
   const btn = card.querySelector('button[onclick="doLogin()"]'); if (btn) btn.style.display = need ? 'none' : '';
@@ -801,37 +850,32 @@ function showSetupIfNeeded() {
   if (need) setTimeout(() => document.getElementById('setupPass').focus(), 50);
   return need;
 }
-function doSetup() {
-  if (CONFIG.users.length) return;
+async function doSetup() {
   const name = document.getElementById('setupUser').value.trim(), p1 = document.getElementById('setupPass').value, p2 = document.getElementById('setupPass2').value;
+  const kod = document.getElementById('setupKod').value.trim();
   const err = document.getElementById('setupErr');
+  if (!kod) { err.textContent = 'Saisis le code d\'installation.'; return; }
   if (!name) { err.textContent = 'Indique un nom.'; return; }
   if (p1.length < 12) { err.textContent = 'Mot de passe trop court (12 caractères minimum).'; return; }
   if (p1 !== p2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
-  const salt = randomSalt();
-  CONFIG.users = [{ name, uid: newUid(), role: 'admin', salt, hash: hashPassword(p1, salt), admin: true, pages: PAGES.map(p => p.id) }];
-  saveConfig();
-  document.getElementById('setupPass').value = ''; document.getElementById('setupPass2').value = '';
-  showSetupIfNeeded();
+  try { await tablo('premye_admin', { kod, non: name, modpas: p1 }); } catch (e) { err.textContent = e.message; return; }
+  err.textContent = '';
+  document.getElementById('setupPass').value = ''; document.getElementById('setupPass2').value = ''; document.getElementById('setupKod').value = '';
+  await showSetupIfNeeded();
   document.getElementById('loginUser').value = name;
   document.getElementById('loginPass').focus();
 }
-function doLogin() {
+let _loginEnCours = false;
+async function doLogin() {
+  if (_loginEnCours) return;
   const name = document.getElementById('loginUser').value, pw = document.getElementById('loginPass').value;
   const err = document.getElementById('loginErr');
-  const lk = loginLock();
-  if (lk.until > Date.now()) { err.textContent = 'Trop de tentatives. Réessaie dans ' + Math.ceil((lk.until - Date.now()) / 1000) + ' s.'; return; }
-  const u = findUser(name);
-  if (!u || hashPassword(pw, u.salt) !== u.hash) {
-    lk.fails = (lk.fails || 0) + 1;
-    if (lk.fails >= 5) { lk.until = Date.now() + Math.min(15 * 60000, 30000 * Math.pow(2, lk.fails - 5)); }
-    saveLoginLock(lk);
-    err.textContent = 'Nom d\'utilisateur ou mot de passe incorrect.'; return;
-  }
-  saveLoginLock({ fails: 0, until: 0 });
+  if (!name.trim() || !pw) { err.textContent = 'Saisis ton nom d\'utilisateur et ton mot de passe.'; return; }
+  _loginEnCours = true; err.textContent = 'Connexion…';
+  try { ouvrirSession(await tablo('konekte', { non: name, modpas: pw })); }
+  catch (e) { err.textContent = e.message; return; }
+  finally { _loginEnCours = false; }
   err.textContent = '';
-  CURRENT_USER = u;
-  try { sessionStorage.setItem('bwat_session', u.name); } catch {}
   document.getElementById('loginPass').value = '';
   auditSessionStart();
   enterApp();
@@ -842,7 +886,7 @@ function doLogout() {
   CURRENT_USER = null; CURRENT_PAGE = null; RELEVE_COMPTE = null; SIM_COMPTE = null;
   document.getElementById('releveContent').innerHTML = '<div class="card"><h2>Relevé de compte</h2><p class="muted">Recherche un compte dans la barre latérale.</p></div>';
   document.getElementById('simContent').innerHTML = '<div class="card"><h2>Simulation de correction</h2><p class="muted">Recherche un compte dans la barre latérale.</p></div>';
-  try { sessionStorage.removeItem('bwat_session'); } catch {}
+  setSesyon(null); CONFIG.users = []; CONFIG.token = ''; if (typeof TOKEN !== 'undefined') TOKEN = '';
   document.getElementById('appShell').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginErr').textContent = '';
@@ -891,8 +935,8 @@ function showPage(id) {
 // ============ PARAMÈTRES ============
 function renderSettings() {
   document.getElementById('nbMois').textContent = MONTHS.length;
-  document.getElementById('tokenInput').value = '';
-  document.getElementById('tokenState').textContent = CONFIG.token ? `Jeton enregistré (…${CONFIG.token.slice(-6)}). Saisis-en un nouveau pour le remplacer.` : 'Aucun jeton enregistré.';
+  { const c = (typeof getConnState === 'function') ? getConnState() : null;
+    document.getElementById('tokenState').textContent = c && c.ok === false && c.auth ? '⚠️ Airtable refuse le jeton du serveur : remplace le secret TABLO_AIRTABLE_TOKEN sur Supabase.' : '✓ Liaison Airtable via le serveur.'; }
   for (const p of PAGES.concat([{ id: 'presence' }])) document.getElementById('code-' + p.id).value = CONFIG.printCodes[p.id] || '';
   renderUsers(); resetUserForm(); refreshCacheNote(); renderSchemaReport(); renderCaisses(); renderPresenceSettings();
   const dv = document.getElementById('deviceIdText'); if (dv) dv.textContent = deviceId();
@@ -921,15 +965,13 @@ function savePrintCodes() {
   for (const p of PAGES.concat([{ id: 'presence' }])) CONFIG.printCodes[p.id] = document.getElementById('code-' + p.id).value.trim();
   saveConfig(); toast('Codes d\'impression enregistrés.'); logEvent('parametres', 'Codes d\'impression modifiés');
 }
-function changeOwnPassword() {
+async function changeOwnPassword() {
   const cur = document.getElementById('pwCurrent').value, n1 = document.getElementById('pwNew').value, n2 = document.getElementById('pwNew2').value;
   const err = document.getElementById('pwErr');
-  const u = findUser(CURRENT_USER.name);
-  if (hashPassword(cur, u.salt) !== u.hash) { err.textContent = 'Mot de passe actuel incorrect.'; return; }
-  if (n1.length < 6) { err.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.'; return; }
+  if (n1.length < 8) { err.textContent = 'Le nouveau mot de passe doit faire au moins 8 caractères.'; return; }
   if (n1 !== n2) { err.textContent = 'Les deux nouveaux mots de passe ne correspondent pas.'; return; }
-  u.salt = randomSalt(); u.hash = hashPassword(n1, u.salt); delete u.defaultPwd;
-  saveConfig(); err.textContent = '';
+  try { const j = await tablo('modpas_mwen', { ansyen: cur, nouvo: n1 }); setSesyon(j.sesyon); } catch (e) { err.textContent = e.message; return; }
+  err.textContent = '';
   document.getElementById('pwCurrent').value = document.getElementById('pwNew').value = document.getElementById('pwNew2').value = '';
   const n = document.getElementById('defaultPwdNote'); if (n) n.style.display = 'none';
   toast('Mot de passe modifié.'); logEvent('parametres', 'Mot de passe modifié');
@@ -944,6 +986,27 @@ function renderUsers() {
         <button class="small danger" onclick="deleteUser('${jsq(u.name)}')">Supprimer</button>
       </td>
     </tr>`).join('');
+  const box = document.getElementById('oldUsersBox'); if (!box) return;
+  const reste = anciensComptes().filter(o => !CONFIG.users.some(u => u.uid === o.uid));
+  box.innerHTML = reste.length ? `<div class="warn-note" style="margin-top:10px;"><b>Anciens comptes de ce poste (${reste.length})</b> — ils n'existent plus que sur ce navigateur. Clique « Recréer » pour les remettre sur le serveur avec le même ID permanent (il faudra leur choisir un mot de passe).
+    <div style="margin-top:6px;">${reste.map((o, i) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 0;"><span><b>${esc(o.name)}</b> <span class="mono">${esc(o.uid)}</span> · ${esc((ROLES[o.role] || ROLES.traitement).label)}</span><span style="white-space:nowrap;"><button class="small" onclick="recreerAncien(${i})">Recréer</button> <button class="small secondary" onclick="oublierAncien(${i})">Ignorer</button></span></div>`).join('')}</div></div>` : '';
+}
+function _anciensReste() { return anciensComptes().filter(o => !CONFIG.users.some(u => u.uid === o.uid)); }
+function recreerAncien(i) {
+  const o = _anciensReste()[i]; if (!o) return;
+  resetUserForm();
+  document.getElementById('userFormTitle').textContent = 'Recréer « ' + o.name + ' » (ID ' + o.uid + ')';
+  document.getElementById('uName').value = o.name; document.getElementById('uKeepUid').value = o.uid;
+  document.getElementById('uRole').value = ROLES[o.role] ? o.role : 'traitement';
+  for (const p of PAGES) document.getElementById('uPage-' + p.id).checked = (o.pages || []).includes(p.id);
+  applyRoleDefaults(true);
+  document.getElementById('uPassHint').textContent = '(choisis son nouveau mot de passe)';
+  document.getElementById('userFormTitle').scrollIntoView({ behavior: 'smooth' });
+}
+function oublierAncien(i) {
+  const o = _anciensReste()[i]; if (!o || !confirm('Ne plus proposer « ' + o.name + ' » ?')) return;
+  try { localStorage.setItem('bwat_anciens_comptes', JSON.stringify(anciensComptes().filter(x => !(x.uid === o.uid && x.name === o.name)))); } catch {}
+  renderUsers();
 }
 // Quand on choisit un rôle, on pré-coche ses pages par défaut (l'admin peut ensuite ajuster) ; l'administrateur a tout
 function applyRoleDefaults(keepPages) {
@@ -958,7 +1021,7 @@ function applyRoleDefaults(keepPages) {
 }
 function resetUserForm() {
   document.getElementById('userFormTitle').textContent = 'Ajouter un utilisateur';
-  document.getElementById('uEditName').value = '';
+  document.getElementById('uEditName').value = ''; document.getElementById('uKeepUid').value = '';
   document.getElementById('uName').value = ''; document.getElementById('uName').disabled = false; document.getElementById('uNameHint').textContent = '';
   document.getElementById('uPass').value = ''; document.getElementById('uPassHint').textContent = '';
   document.getElementById('uRole').value = 'traitement'; applyRoleDefaults();
@@ -976,7 +1039,7 @@ function editUser(name) {
   applyRoleDefaults(true);
   document.getElementById('userFormTitle').scrollIntoView({ behavior: 'smooth' });
 }
-function saveUserForm() {
+async function saveUserForm() {
   const editing = document.getElementById('uEditName').value;
   const name = document.getElementById('uName').value.trim();
   const pw = document.getElementById('uPass').value;
@@ -986,39 +1049,35 @@ function saveUserForm() {
   if (!name) { err.textContent = 'Indique un nom d\'utilisateur.'; return; }
   const clash = findUser(name);
   if (clash && (!editing || clash.name.toLowerCase() !== editing.toLowerCase())) { err.textContent = 'Ce nom existe déjà.'; return; }
-  if ((!editing || pw) && pw.length < 6) { err.textContent = 'Le mot de passe doit faire au moins 6 caractères.'; return; }
+  if ((!editing || pw) && pw.length < 8) { err.textContent = 'Le mot de passe doit faire au moins 8 caractères.'; return; }
   if (!admin && !pages.length) { err.textContent = 'Coche au moins une page (ou Administrateur).'; return; }
-  let u = editing ? findUser(editing) : null;
-  if (u) {
-    if (u.admin && !admin && CONFIG.users.filter(x => x.admin).length === 1) { err.textContent = 'Il doit rester au moins un administrateur.'; return; }
-    const oldName = u.name; const isSelf = CURRENT_USER && CURRENT_USER.name === oldName;
-    if (name !== oldName) {
-      (u.aliases = u.aliases || []).push({ name: oldName, until: Date.now() });
-      u.name = name;
-      if (isSelf) { try { sessionStorage.setItem('bwat_session', name); } catch {} }
-      logEvent('parametres', `Utilisateur renommé : ${oldName} → ${name}`);
-    }
-    u.admin = admin; u.role = role; u.pages = admin ? PAGES.map(p => p.id) : pages;
-    if (pw) { u.salt = randomSalt(); u.hash = hashPassword(pw, u.salt); delete u.defaultPwd; }
-  } else {
-    const salt = randomSalt();
-    CONFIG.users.push({ name, uid: newUid(), role, salt, hash: hashPassword(pw, salt), admin, pages: admin ? PAGES.map(p => p.id) : pages });
-  }
-  saveConfig();
-  if (CURRENT_USER && u && u === findUser(name) && (CURRENT_USER === u || CURRENT_USER.name === editing)) { CURRENT_USER = u; buildNav(); }
+  const u = editing ? findUser(editing) : null;
+  if (editing && !u) { err.textContent = 'Utilisateur introuvable.'; return; }
+  err.textContent = 'Enregistrement…';
+  let j;
+  try {
+    j = u ? await tablo('modifye', { uid: u.uid, non: name, role, pages: admin ? PAGES.map(p => p.id) : pages, modpas: pw || undefined })
+          : await tablo('kreye', { non: name, role, pages: admin ? PAGES.map(p => p.id) : pages, modpas: pw, uid: document.getElementById('uKeepUid').value || undefined });
+  } catch (e) { err.textContent = e.message; return; }
+  err.textContent = '';
+  if (j.sesyon) setSesyon(j.sesyon);
+  CONFIG.users = j.itilizate || CONFIG.users;
+  if (u && name !== u.name) logEvent('parametres', `Utilisateur renommé : ${u.name} → ${name}`);
+  if (u && CURRENT_USER && CURRENT_USER.uid === u.uid) { CURRENT_USER = findUser(name) || CURRENT_USER; buildNav(); }
   renderUsers(); resetUserForm(); toast('Utilisateur enregistré.'); logEvent('parametres', `Utilisateur ${editing ? 'modifié' : 'ajouté'} : ${name}`);
 }
-function deleteUser(name) {
+async function deleteUser(name) {
   const u = findUser(name); if (!u) return;
   if (u.admin && CONFIG.users.filter(x => x.admin).length === 1) { alert('Impossible : il doit rester au moins un administrateur.'); return; }
   if (!confirm('Supprimer l\'utilisateur « ' + u.name + ' » ?')) return;
-  CONFIG.users = CONFIG.users.filter(x => x !== u);
-  saveConfig(); logEvent('parametres', 'Utilisateur supprimé : ' + u.name);
-  if (CURRENT_USER && CURRENT_USER.name === u.name) { doLogout(); return; }
+  let j; try { j = await tablo('efase', { uid: u.uid }); } catch (e) { alert(e.message); return; }
+  CONFIG.users = j.itilizate || CONFIG.users.filter(x => x !== u);
+  logEvent('parametres', 'Utilisateur supprimé : ' + u.name);
+  if (CURRENT_USER && CURRENT_USER.uid === u.uid) { doLogout(); return; }
   renderUsers(); resetUserForm();
 }
 function exportConfig() {
-  const copy = JSON.parse(JSON.stringify(CONFIG)); if (copy.token) copy.token = 'b64:' + btoa(copy.token);
+  const copy = JSON.parse(JSON.stringify(CONFIG)); delete copy.token; delete copy.users;
   const blob = new Blob([JSON.stringify({ app: 'bwat-sekrem', version: 4, exportedAt: new Date().toISOString(), config: copy }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bwat-sekrem-config.json'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -1029,13 +1088,12 @@ function importConfigFile(input) {
   reader.onload = () => {
     try {
       const j = JSON.parse(reader.result);
-      if (!j || j.app !== 'bwat-sekrem' || !j.config || !Array.isArray(j.config.users)) throw new Error('fichier non reconnu');
-      if (!confirm('Remplacer la configuration de ce poste (utilisateurs, jeton, codes) par celle du fichier ?')) return;
-      CONFIG = Object.assign({ users: [], token: '', printCodes: {} }, j.config);
-      if (CONFIG.token && CONFIG.token.startsWith('b64:')) CONFIG.token = atob(CONFIG.token.slice(4));
+      if (!j || j.app !== 'bwat-sekrem' || !j.config) throw new Error('fichier non reconnu');
+      if (!confirm('Remplacer la configuration de ce poste (codes, caisses, pointage) par celle du fichier ? Les comptes et le jeton restent ceux du serveur.')) return;
+      const keepUsers = CONFIG.users, keepToken = CONFIG.token;
+      CONFIG = Object.assign({ printCodes: {} }, j.config, { users: keepUsers, token: keepToken });
       saveConfig();
-      toast('Configuration importée : ' + CONFIG.users.length + ' utilisateur(s).'); logEvent('parametres', 'Configuration importée');
-      CURRENT_USER = findUser(CURRENT_USER.name); if (!CURRENT_USER) { doLogout(); return; }
+      toast('Configuration importée.'); logEvent('parametres', 'Configuration importée');
       buildNav(); renderSettings();
     } catch (e) { alert('Import impossible : ' + e.message); }
     input.value = '';
@@ -1147,7 +1205,7 @@ function applyZoom(z) {
 function zoomStep(dir) { const i = ZOOM_LEVELS.indexOf(getZoom()); const n = Math.min(ZOOM_LEVELS.length - 1, Math.max(0, i + dir)); applyZoom(ZOOM_LEVELS[n]); if (CURRENT_USER) logEvent('affichage', 'Taille du texte : ' + Math.round(ZOOM_LEVELS[n] * 100) + ' %'); }
 
 // ============ INITIALISATION ============
-function initApp() {
+async function initApp() {
   loadConfig();
   loadService();
   if (typeof sortInit === 'function') sortInit();
@@ -1155,11 +1213,12 @@ function initApp() {
   renderServicePick();
   applyZoom(getZoom());
   document.getElementById('loginScreen').style.display = 'flex';
-  let sess = null; try { sess = sessionStorage.getItem('bwat_session'); } catch {}
-  const u = sess ? findUser(sess) : null;
-  if (showSetupIfNeeded()) return;
-  if (u) { CURRENT_USER = u; auditSessionStart(); enterApp(); }
-  else document.getElementById('loginUser').focus();
+  if (SESYON) {
+    try { ouvrirSession(await tablo('mwen')); auditSessionStart(); enterApp(); return; }
+    catch { setSesyon(null); CURRENT_USER = null; }
+  }
+  if (await showSetupIfNeeded()) return;
+  document.getElementById('loginUser').focus();
 }
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -1176,7 +1235,8 @@ function openResetForm() {
 async function confirmReset() {
   const pwd = document.getElementById('resetPwd').value, err = document.getElementById('resetErr');
   if (!CURRENT_USER || !CURRENT_USER.admin) return;
-  if (hashPassword(pwd, CURRENT_USER.salt) !== CURRENT_USER.hash) { err.textContent = 'Mot de passe incorrect.'; logEvent('parametres', 'Réinitialisation du poste REFUSÉE — mot de passe incorrect'); return; }
+  let vr = { ok: false }; try { vr = await tablo('verifye', { non: CURRENT_USER.name, modpas: pwd }); } catch (e) { err.textContent = e.message; return; }
+  if (!vr.ok) { err.textContent = vr['erè'] || 'Mot de passe incorrect.'; logEvent('parametres', 'Réinitialisation du poste REFUSÉE — mot de passe incorrect'); return; }
   const keepToken = document.getElementById('resetKeepToken').checked, keepSettings = document.getElementById('resetKeepSettings').checked;
   if (!confirm('Confirmer la remise à zéro de ce poste ?\n\nSeront effacés : cache des transactions, journal d\'activité, pointages locaux, préférences d\'affichage et d\'impression.\nSeront conservés : utilisateurs et codes d\'impression' + (keepToken ? ', jeton' : '') + (keepSettings ? ', réglages (caisses, pointage)' : '') + '.\n\nLe fichier se rechargera ensuite.')) return;
   const btn = document.getElementById('resetBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Réinitialisation…'; }
@@ -1250,16 +1310,16 @@ function pageDuService(id) {
 function renderLoginConn() {
   const el = document.getElementById('loginConn'); if (!el) return;
   const c = (typeof getConnState === 'function') ? getConnState() : null;
-  const hasToken = !!(CONFIG && CONFIG.token);
+  const hasToken = true; // jeton conservé sur le serveur
   const when = c && c.t ? new Date(c.t).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null;
   let bad = false, html = '';
   if (!hasToken) { bad = true; html = `<b>⚠️ Aucun jeton Airtable sur ce poste</b>Connecte-toi en administrateur puis saisis-le dans Paramètres, ou utilise « Code d'accès » ci-dessous.`; }
   else if (c && c.ok === false) {
     bad = true;
-    html = c.auth ? `<b>⚠️ Jeton refusé par Airtable${when ? ' (' + when + ')' : ''}</b>Le code d'accès a probablement changé ou expiré : saisis le nouveau jeton avec « Code d'accès ».`
+    html = c.auth ? `<b>⚠️ Accès Airtable refusé${when ? ' (' + when + ')' : ''}</b>Si tu viens de te connecter, réessaie. Sinon le jeton du serveur a peut-être expiré : l'administrateur doit remplacer le secret TABLO_AIRTABLE_TOKEN sur Supabase.`
                   : `<b>⚠️ Dernière synchronisation en échec${when ? ' (' + when + ')' : ''}</b>${esc(String(c.msg || '').slice(0, 150))}`;
   } else if (c && c.ok) html = `✓ Dernière synchronisation réussie${when ? ' le ' + when : ''}.`;
-  else html = 'Jeton enregistré sur ce poste. La synchronisation démarre après la connexion.';
+  else html = 'Liaison Airtable par le serveur. La synchronisation démarre après la connexion.';
   el.innerHTML = html; el.className = 'login-conn' + (bad ? ' bad' : '');
   const help = document.querySelector('.login-help'); if (help) help.className = 'login-help' + (bad ? ' bad' : '');
 }
@@ -1270,6 +1330,7 @@ function openLoginToken() {
   setTimeout(() => document.getElementById('ltToken').focus(), 50);
 }
 function saveLoginToken() {
+  document.getElementById('loginTokenForm').classList.remove('open'); return; // le jeton est désormais sur le serveur
   const tok = document.getElementById('ltToken').value.trim();
   const adm = findUser(document.getElementById('ltAdmin').value.trim());
   const pwd = document.getElementById('ltPwd').value;
@@ -4542,13 +4603,15 @@ function presOpenLeaveForm() {
   document.getElementById('leaveForm').classList.add('open');
   setTimeout(() => document.getElementById('leaveReason').focus(), 50);
 }
-function presConfirmLeave() {
+async function presConfirmLeave() {
   const reason = document.getElementById('leaveReason').value.trim(), adminName = document.getElementById('leaveAdmin').value.trim(), pwd = document.getElementById('leavePwd').value;
   const err = document.getElementById('leaveErr');
   if (!reason) { err.textContent = 'Indiquez le motif du départ.'; return; }
-  const adm = findUser(adminName);
-  if (!adm || !isSupervisor(adm)) { err.textContent = 'Cet utilisateur n\'est ni administrateur ni superviseur.'; return; }
-  if (hashPassword(pwd, adm.salt) !== adm.hash) { err.textContent = 'Mot de passe administrateur incorrect.'; presLog('depart', `REFUSÉ — mot de passe incorrect pour ${adm.name} — motif : ${reason}`); return; }
+  const adm0 = findUser(adminName);
+  if (!adm0 || !isSupervisor(adm0)) { err.textContent = 'Cet utilisateur n\'est ni administrateur ni superviseur.'; return; }
+  let vr = { ok: false }; try { vr = await tablo('verifye', { non: adm0.name, modpas: pwd }); } catch (e) { err.textContent = e.message; return; }
+  if (!vr.ok || !isSupervisor(vr.mwen)) { err.textContent = vr['erè'] || 'Mot de passe administrateur incorrect.'; presLog('depart', `REFUSÉ — mot de passe incorrect pour ${adm0.name} — motif : ${reason}`); return; }
+  const adm = vr.mwen;
   const st = presState(CURRENT_USER.uid); st.leave = { date: todayIso(), at: Date.now(), reason, by: `${adm.name} [${adm.uid || ''}]` }; presSave(CURRENT_USER.uid, st);
   document.getElementById('leaveForm').classList.remove('open');
   presLog('depart', `${reason} — autorisé par ${adm.name} [${adm.uid || ''}]`, { details: reason });
