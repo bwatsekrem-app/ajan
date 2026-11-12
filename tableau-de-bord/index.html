@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src https://fdsuyqbscrnityotpmbc.supabase.co; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src https://fdsuyqbscrnityotpmbc.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Bwat Sekrèm — Tableau de bord Épargne</title>
 <style>
   :root {
@@ -368,6 +368,46 @@
     .overview .ov-card { padding: 6px 10px; }
     .overview .num { font-size: 15px !important; }
   }
+
+  /* ===== Popups (remplacent alert / confirm / prompt du navigateur) ===== */
+  .ui-back { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: rgba(7,53,82,.48); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); opacity: 0; transition: opacity .16s ease; }
+  .ui-back.show { opacity: 1; }
+  .ui-card { background: #fff; width: 100%; max-width: 420px; border-radius: 16px; box-shadow: 0 24px 70px rgba(7,53,82,.35), 0 2px 8px rgba(0,0,0,.08);
+    overflow: hidden; transform: translateY(10px) scale(.97); transition: transform .18s cubic-bezier(.2,.9,.3,1.2); }
+  .ui-back.show .ui-card { transform: none; }
+  .ui-head { display: flex; gap: 14px; align-items: flex-start; padding: 22px 22px 6px; }
+  .ui-ico { flex: none; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+  .ui-ico.info { background: #E3EEF6; color: var(--navy-2); }
+  .ui-ico.warn { background: var(--amber-bg); color: var(--amber); }
+  .ui-ico.danger, .ui-ico.error { background: var(--red-bg); color: var(--red); }
+  .ui-ico.success { background: var(--green-bg); color: var(--green-dark); }
+  .ui-title { font-size: 16px; font-weight: 700; color: var(--navy); margin: 2px 0 4px; }
+  .ui-msg { color: var(--text); font-size: 13.5px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; max-height: 50vh; overflow-y: auto; }
+  .ui-body { padding: 0 22px 4px 78px; }
+  .ui-body input { width: 100%; box-sizing: border-box; margin-top: 10px; padding: 9px 11px; border: 1.5px solid #C9D2CE; border-radius: 9px; font: inherit; }
+  .ui-body input:focus { outline: none; border-color: var(--navy-2); box-shadow: 0 0 0 3px rgba(11,82,127,.15); }
+  .ui-actions { display: flex; gap: 10px; justify-content: flex-end; padding: 16px 22px 20px; }
+  .ui-actions button { min-width: 96px; padding: 9px 16px; border-radius: 9px; font-weight: 600; font-size: 13.5px; cursor: pointer; border: 1.5px solid transparent; }
+  .ui-btn-cancel { background: #fff; border-color: #C9D2CE !important; color: var(--text); }
+  .ui-btn-cancel:hover { background: var(--paper); }
+  .ui-btn-ok { background: var(--navy-2); color: #fff; }
+  .ui-btn-ok:hover { background: var(--navy); }
+  .ui-btn-ok.danger { background: var(--red); } .ui-btn-ok.danger:hover { background: #962a24; }
+  .ui-btn-ok.success { background: var(--green-dark); }
+  .ui-actions button:focus-visible { outline: 3px solid rgba(11,82,127,.35); outline-offset: 2px; }
+  @media (max-width: 480px) { .ui-body { padding-left: 22px; } .ui-actions button { flex: 1; } }
+  /* Fenêtres existantes : même style */
+  .modal-back { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); background: rgba(7,53,82,.48) !important; }
+  .modal { border-radius: 16px !important; box-shadow: 0 24px 70px rgba(7,53,82,.35), 0 2px 8px rgba(0,0,0,.08) !important; }
+  .modal-back.open .modal { animation: uiPop .18s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes uiPop { from { transform: translateY(10px) scale(.97); opacity: .4; } to { transform: none; opacity: 1; } }
+  /* Bandeau hors ligne */
+  .offline-banner { display: none; margin: 10px 20px 0; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+    background: var(--amber-bg); border: 1px solid #E8CF9A; color: var(--amber); align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+  .offline-banner.show { display: flex; }
+  .offline-banner button { background: var(--navy-2); color: #fff; border: 0; border-radius: 7px; padding: 6px 12px; font-weight: 600; cursor: pointer; }
+  .offline-pill { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); font-size: 10.5px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -452,13 +492,14 @@
       <div class="sb-zoom"><span>Taille du texte</span><button onclick="zoomStep(-1)" title="Réduire">A−</button><b class="zoomLabel">100 %</b><button onclick="zoomStep(1)" title="Agrandir">A+</button></div>
       <div class="sb-sync"><span id="syncStatusText">—</span>
         <button class="syncBtn" onclick="startSync(false)" title="Mises à jour uniquement (ajouts, modifications, suppressions depuis la dernière synchronisation)">↻ Resynchroniser</button>
-        <button class="syncBtn full" onclick="if(confirm('Resynchronisation complète : le cache de ce poste est vidé et les 17 mois sont rechargés (1 à 4 minutes). Continuer ?')) startSync(true)" title="Vide le cache et recharge tous les mois">⟳ Resynchronisation complète (vider le cache)</button>
+        <button class="syncBtn full" onclick="uiConfirm('Le cache de ce poste est vidé et les 17 mois sont rechargés (1 à 4 minutes).', { title: 'Resynchronisation complète', ok: 'Continuer' }).then(ok => { if (ok) startSync(true); })" title="Vide le cache et recharge tous les mois">⟳ Resynchronisation complète (vider le cache)</button>
       </div>
     </div>
   </aside>
 
   <main class="main">
     <div id="printStampTop" class="print-stamp-top"></div>
+    <div id="offlineBanner" class="offline-banner screen-only"><span id="offlineText"></span><button id="offlineBtn" style="display:none" onclick="reconnecterEnLigne()">Se reconnecter</button></div>
     <div id="syncBanner" class="sync-banner screen-only" style="display:none"></div>
     <div id="globalProgress">
       <div class="progress-row"><span id="progressLabel">Préparation…</span><span id="progressPct">0%</span></div>
@@ -738,6 +779,55 @@ function randomSalt() { const a = new Uint8Array(12); if (window.crypto && crypt
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function jsq(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
+
+// ============ POPUPS (alert / confirm / prompt) ============
+const UI_ICO = { info: 'i', warn: '!', danger: '!', error: '×', success: '✓' };
+const UI_TITRE = { info: 'Information', warn: 'Attention', danger: 'Confirmer', error: 'Erreur', success: 'C\'est fait' };
+let _uiFile = Promise.resolve();
+function _uiDialog(o) {
+  const run = () => new Promise(resolve => {
+    const type = o.type || 'info';
+    const back = document.createElement('div'); back.className = 'ui-back';
+    back.setAttribute('role', o.kind === 'alert' ? 'alertdialog' : 'dialog'); back.setAttribute('aria-modal', 'true');
+    back.innerHTML = `<div class="ui-card"><div class="ui-head"><div class="ui-ico ${type}">${UI_ICO[type] || 'i'}</div><div style="flex:1;min-width:0;">
+      <div class="ui-title">${esc(o.title || UI_TITRE[type])}</div><div class="ui-msg"></div></div></div>
+      <div class="ui-body">${o.kind === 'prompt' ? `<input type="text" class="ui-input" placeholder="${esc(o.placeholder || '')}">` : ''}</div>
+      <div class="ui-actions">${o.kind !== 'alert' ? `<button class="ui-btn-cancel">${esc(o.cancel || 'Annuler')}</button>` : ''}<button class="ui-btn-ok ${type === 'danger' ? 'danger' : type === 'success' ? 'success' : ''}">${esc(o.ok || 'OK')}</button></div></div>`;
+    back.querySelector('.ui-msg').textContent = String(o.message == null ? '' : o.message);
+    const input = back.querySelector('.ui-input'); if (input) input.value = o.value || '';
+    const prevFocus = document.activeElement;
+    let done = false;
+    const close = (val) => {
+      if (done) return; done = true;
+      document.removeEventListener('keydown', onKey, true);
+      back.classList.remove('show'); setTimeout(() => back.remove(), 170);
+      try { prevFocus && prevFocus.focus && prevFocus.focus(); } catch {}
+      resolve(val);
+    };
+    const ok = () => close(o.kind === 'prompt' ? input.value : true);
+    const cancel = () => close(o.kind === 'prompt' ? null : o.kind === 'alert' ? true : false);
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+      else if (e.key === 'Enter' && !(e.target && e.target.classList && e.target.classList.contains('ui-btn-cancel'))) { e.preventDefault(); e.stopPropagation(); ok(); }
+      else if (e.key === 'Tab') { const f = [...back.querySelectorAll('input,button')]; const i = f.indexOf(document.activeElement);
+        e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus(); }
+    };
+    back.querySelector('.ui-btn-ok').onclick = ok;
+    const cb = back.querySelector('.ui-btn-cancel'); if (cb) cb.onclick = cancel;
+    back.addEventListener('mousedown', (e) => { if (e.target === back && o.kind !== 'alert') cancel(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(back);
+    requestAnimationFrame(() => back.classList.add('show'));
+    setTimeout(() => (input || (o.type === 'danger' && cb) || back.querySelector('.ui-btn-ok')).focus(), 30);
+  });
+  const p = _uiFile.then(run); _uiFile = p.catch(() => {}); return p;
+}
+function uiAlert(message, opts) { return _uiDialog(Object.assign({ kind: 'alert', message, type: 'info' }, typeof opts === 'string' ? { title: opts } : opts)); }
+function uiConfirm(message, opts) { return _uiDialog(Object.assign({ kind: 'confirm', message, type: 'warn', ok: 'Confirmer' }, typeof opts === 'string' ? { title: opts } : opts)); }
+function uiPrompt(message, value, opts) { return _uiDialog(Object.assign({ kind: 'prompt', message, value, type: 'info', ok: 'Valider' }, opts)); }
+// Filet de sécurité : tout alert() restant passe aussi par le popup.
+window.alert = (m) => { const t = String(m); uiAlert(t, { type: /impossible|erreur|échec|refus/i.test(t) ? 'error' : 'warn' }); };
+
 // ============ CONFIGURATION LOCALE ============
 const CONFIG_KEY = 'bwat_config_v4';
 
@@ -812,7 +902,7 @@ async function tablo(aksyon, data) {
   try {
     r = await _fetchNatif(TABLO_API, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, SESYON ? { 'x-tablo-sesyon': SESYON } : {}),
       body: JSON.stringify(Object.assign({ aksyon }, data || {})) });
-  } catch (e) { throw new Error('Serveur injoignable — vérifie la connexion Internet.'); }
+  } catch (e) { const er = new Error('Serveur injoignable — vérifie la connexion Internet.'); er.reseau = true; throw er; }
   let j = {}; try { j = await r.json(); } catch {}
   if (r.status === 401 && j.sesyon_fini) { sesyonFini(); throw new Error(j['erè'] || 'Session expirée'); }
   if (!r.ok) throw new Error(j['erè'] || ('Erreur serveur ' + r.status));
@@ -821,6 +911,7 @@ async function tablo(aksyon, data) {
 window.fetch = async function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   if (!url.startsWith('https://api.airtable.com/')) return _fetchNatif(input, init);
+  if (HORS_LIGNE) throw new TypeError('Mode hors ligne');
   init = init || {};
   const r = await _fetchNatif(TABLO_API, { method: 'POST', signal: init.signal,
     headers: { 'Content-Type': 'application/json', 'x-tablo-sesyon': SESYON || '' },
@@ -837,12 +928,86 @@ function ouvrirSession(j) {
 }
 function anciensComptes() { try { return JSON.parse(localStorage.getItem('bwat_anciens_comptes') || '[]'); } catch { return []; } }
 
+// ============ MODE HORS LIGNE ============
+// Après une connexion AVEC Internet, une empreinte du mot de passe (PBKDF2, 210 000 tours) est gardée sur ce poste.
+// Pendant HL_DUREE, la même personne peut rouvrir le fichier SANS Internet : elle voit le dernier état synchronisé,
+// sans synchronisation ; les pointages attendent le retour d'Internet. Au-delà, il faut se reconnecter avec Internet.
+let HORS_LIGNE = false;
+const HL_DUREE = 24 * 3600 * 1000, HL_TOURS = 210000;
+function hlTout() { try { return JSON.parse(localStorage.getItem('bwat_hors_ligne') || '{}'); } catch { return {}; } }
+function hlEcrire(t) { try { localStorage.setItem('bwat_hors_ligne', JSON.stringify(t)); } catch {} }
+async function hlEmpreinte(pw, saltHex) {
+  const salt = Uint8Array.from(saltHex.match(/../g).map(h => parseInt(h, 16)));
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: HL_TOURS }, k, 256);
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function hlMemoriser(pw) {
+  if (!CURRENT_USER || !window.crypto || !crypto.subtle) return;
+  try {
+    const salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+    const t = hlTout();
+    for (const k of Object.keys(t)) if (!t[k] || t[k].jiska < Date.now()) delete t[k]; // ménage
+    t[CURRENT_USER.name.toLowerCase()] = { salt, hash: await hlEmpreinte(pw, salt), mwen: CURRENT_USER, itilizate: CONFIG.users, jiska: Date.now() + HL_DUREE };
+    hlEcrire(t);
+  } catch {}
+}
+function hlOublier(name) { const t = hlTout(); delete t[String(name || '').toLowerCase()]; hlEcrire(t); }
+function hlEntrer(rec) {
+  HORS_LIGNE = true;
+  CONFIG.users = rec.itilizate || [rec.mwen];
+  CONFIG.token = 'serveur'; if (typeof TOKEN !== 'undefined') TOKEN = 'serveur';
+  CURRENT_USER = findUser(rec.mwen.name) || rec.mwen;
+  try { sessionStorage.setItem('bwat_hl_non', CURRENT_USER.name); } catch {}
+}
+async function hlConnexion(name, pw) {
+  const lk = loginLock();
+  if (lk.until > Date.now()) throw new Error('Trop de tentatives. Réessaie dans ' + Math.ceil((lk.until - Date.now()) / 1000) + ' s.');
+  const rec = hlTout()[String(name || '').trim().toLowerCase()];
+  if (!rec) throw new Error('Pas de connexion Internet. Sans Internet, seule une personne qui s\'est connectée sur ce poste avec Internet dans les dernières 24 h peut entrer.');
+  if (rec.jiska < Date.now()) throw new Error('Pas de connexion Internet, et ta dernière connexion en ligne sur ce poste date de plus de 24 h. Reconnecte-toi une fois avec Internet.');
+  if ((await hlEmpreinte(pw, rec.salt)) !== rec.hash) {
+    lk.fails = (lk.fails || 0) + 1; if (lk.fails >= 5) lk.until = Date.now() + Math.min(15 * 60000, 30000 * Math.pow(2, lk.fails - 5)); saveLoginLock(lk);
+    throw new Error('Nom d\'utilisateur ou mot de passe incorrect.');
+  }
+  saveLoginLock({ fails: 0, until: 0 });
+  hlEntrer(rec);
+}
+function hlRestaurer() {
+  let n = null; try { n = sessionStorage.getItem('bwat_hl_non'); } catch {}
+  const rec = n ? hlTout()[n.toLowerCase()] : null;
+  if (!rec || rec.jiska < Date.now()) return false;
+  hlEntrer(rec); return true;
+}
+function renderOfflineBanner() {
+  const b = document.getElementById('offlineBanner'); if (!b) return;
+  b.classList.toggle('show', HORS_LIGNE);
+  if (!HORS_LIGNE) return;
+  const enLigne = navigator.onLine;
+  document.getElementById('offlineText').innerHTML = enLigne
+    ? '<b>Internet est revenu.</b> Tu travailles encore sur les données hors ligne : reconnecte-toi pour synchroniser et envoyer les pointages.'
+    : '<b>Mode hors ligne</b> — données du dernier état synchronisé sur ce poste. Pas de synchronisation ; les pointages seront envoyés au retour d\'Internet.';
+  document.getElementById('offlineBtn').style.display = enLigne ? '' : 'none';
+}
+async function reconnecterEnLigne() {
+  const nom = CURRENT_USER ? CURRENT_USER.name : '';
+  doLogout();
+  document.getElementById('loginUser').value = nom;
+  document.getElementById('loginPass').focus();
+  document.getElementById('loginErr').textContent = '';
+}
+window.addEventListener('online', renderOfflineBanner);
+window.addEventListener('offline', renderOfflineBanner);
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
+
 // ============ CONNEXION ============
 function loginLock() { try { return JSON.parse(localStorage.getItem('bwat_login_lock') || '{}'); } catch { return {}; } }
 function saveLoginLock(o) { try { localStorage.setItem('bwat_login_lock', JSON.stringify(o)); } catch {} }
 async function showSetupIfNeeded() {
   let need = false;
-  try { need = !(await tablo('eta')).gen_itilizate; } catch (e) { const el = document.getElementById('loginErr'); if (el) el.textContent = e.message; }
+  try { need = !(await tablo('eta')).gen_itilizate; } catch (e) { const el = document.getElementById('loginErr'); if (el && !e.reseau) el.textContent = e.message; }
   const card = document.querySelector('#loginScreen .login-card');
   for (const id of ['loginUser', 'loginPass']) { const el = document.getElementById(id); el.style.display = need ? 'none' : ''; if (el.previousElementSibling && el.previousElementSibling.tagName === 'LABEL') el.previousElementSibling.style.display = need ? 'none' : ''; }
   const btn = card.querySelector('button[onclick="doLogin()"]'); if (btn) btn.style.display = need ? 'none' : '';
@@ -872,9 +1037,13 @@ async function doLogin() {
   const err = document.getElementById('loginErr');
   if (!name.trim() || !pw) { err.textContent = 'Saisis ton nom d\'utilisateur et ton mot de passe.'; return; }
   _loginEnCours = true; err.textContent = 'Connexion…';
-  try { ouvrirSession(await tablo('konekte', { non: name, modpas: pw })); }
+  try {
+    try { ouvrirSession(await tablo('konekte', { non: name, modpas: pw })); HORS_LIGNE = false; await hlMemoriser(pw); }
+    catch (e) { if (!e.reseau) throw e; await hlConnexion(name, pw); }
+  }
   catch (e) { err.textContent = e.message; return; }
   finally { _loginEnCours = false; }
+  try { sessionStorage.setItem('bwat_hl_non', CURRENT_USER.name); } catch {}
   err.textContent = '';
   document.getElementById('loginPass').value = '';
   auditSessionStart();
@@ -887,6 +1056,7 @@ function doLogout() {
   document.getElementById('releveContent').innerHTML = '<div class="card"><h2>Relevé de compte</h2><p class="muted">Recherche un compte dans la barre latérale.</p></div>';
   document.getElementById('simContent').innerHTML = '<div class="card"><h2>Simulation de correction</h2><p class="muted">Recherche un compte dans la barre latérale.</p></div>';
   setSesyon(null); CONFIG.users = []; CONFIG.token = ''; if (typeof TOKEN !== 'undefined') TOKEN = '';
+  HORS_LIGNE = false; try { sessionStorage.removeItem('bwat_hl_non'); } catch {} renderOfflineBanner();
   document.getElementById('appShell').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginErr').textContent = '';
@@ -901,6 +1071,7 @@ function enterApp() {
   if (CURRENT_USER.admin && !CONFIG.token) showPage('parametres');
   else showPage(first ? first.id : 'parametres');
   if (CURRENT_USER.admin) renderSettings();
+  renderOfflineBanner();
   presOnOpen(); presStart();
   if (!DATA_READY && !SYNC_RUNNING) {
     if (CONFIG.token) startSync(false);
@@ -970,7 +1141,8 @@ async function changeOwnPassword() {
   const err = document.getElementById('pwErr');
   if (n1.length < 8) { err.textContent = 'Le nouveau mot de passe doit faire au moins 8 caractères.'; return; }
   if (n1 !== n2) { err.textContent = 'Les deux nouveaux mots de passe ne correspondent pas.'; return; }
-  try { const j = await tablo('modpas_mwen', { ansyen: cur, nouvo: n1 }); setSesyon(j.sesyon); } catch (e) { err.textContent = e.message; return; }
+  if (HORS_LIGNE) { err.textContent = 'Impossible hors ligne : reconnecte-toi avec Internet.'; return; }
+  try { const j = await tablo('modpas_mwen', { ansyen: cur, nouvo: n1 }); setSesyon(j.sesyon); await hlMemoriser(n1); } catch (e) { err.textContent = e.message; return; }
   err.textContent = '';
   document.getElementById('pwCurrent').value = document.getElementById('pwNew').value = document.getElementById('pwNew2').value = '';
   const n = document.getElementById('defaultPwdNote'); if (n) n.style.display = 'none';
@@ -1003,8 +1175,8 @@ function recreerAncien(i) {
   document.getElementById('uPassHint').textContent = '(choisis son nouveau mot de passe)';
   document.getElementById('userFormTitle').scrollIntoView({ behavior: 'smooth' });
 }
-function oublierAncien(i) {
-  const o = _anciensReste()[i]; if (!o || !confirm('Ne plus proposer « ' + o.name + ' » ?')) return;
+async function oublierAncien(i) {
+  const o = _anciensReste()[i]; if (!o || !(await uiConfirm('« ' + o.name + ' » ne sera plus proposé dans les anciens comptes de ce poste.', { title: 'Ignorer ce compte ?', ok: 'Ignorer' }))) return;
   try { localStorage.setItem('bwat_anciens_comptes', JSON.stringify(anciensComptes().filter(x => !(x.uid === o.uid && x.name === o.name)))); } catch {}
   renderUsers();
 }
@@ -1068,9 +1240,9 @@ async function saveUserForm() {
 }
 async function deleteUser(name) {
   const u = findUser(name); if (!u) return;
-  if (u.admin && CONFIG.users.filter(x => x.admin).length === 1) { alert('Impossible : il doit rester au moins un administrateur.'); return; }
-  if (!confirm('Supprimer l\'utilisateur « ' + u.name + ' » ?')) return;
-  let j; try { j = await tablo('efase', { uid: u.uid }); } catch (e) { alert(e.message); return; }
+  if (u.admin && CONFIG.users.filter(x => x.admin).length === 1) { uiAlert('Il doit rester au moins un administrateur.', { type: 'error', title: 'Suppression impossible' }); return; }
+  if (!(await uiConfirm('Le compte « ' + u.name + ' » ne pourra plus se connecter, sur aucun poste.', { type: 'danger', title: 'Supprimer cet utilisateur ?', ok: 'Supprimer' }))) return;
+  let j; try { j = await tablo('efase', { uid: u.uid }); } catch (e) { uiAlert(e.message, { type: 'error' }); return; }
   CONFIG.users = j.itilizate || CONFIG.users.filter(x => x !== u);
   logEvent('parametres', 'Utilisateur supprimé : ' + u.name);
   if (CURRENT_USER && CURRENT_USER.uid === u.uid) { doLogout(); return; }
@@ -1085,17 +1257,17 @@ function exportConfig() {
 function importConfigFile(input) {
   const file = input.files && input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const j = JSON.parse(reader.result);
       if (!j || j.app !== 'bwat-sekrem' || !j.config) throw new Error('fichier non reconnu');
-      if (!confirm('Remplacer la configuration de ce poste (codes, caisses, pointage) par celle du fichier ? Les comptes et le jeton restent ceux du serveur.')) return;
+      if (!(await uiConfirm('Les codes d\'impression, caisses et réglages de pointage de ce poste seront remplacés par ceux du fichier. Les comptes et le jeton restent ceux du serveur.', { title: 'Importer la configuration ?', ok: 'Importer' }))) { input.value = ''; return; }
       const keepUsers = CONFIG.users, keepToken = CONFIG.token;
       CONFIG = Object.assign({ printCodes: {} }, j.config, { users: keepUsers, token: keepToken });
       saveConfig();
       toast('Configuration importée.'); logEvent('parametres', 'Configuration importée');
       buildNav(); renderSettings();
-    } catch (e) { alert('Import impossible : ' + e.message); }
+    } catch (e) { uiAlert(e.message, { type: 'error', title: 'Import impossible' }); }
     input.value = '';
   };
   reader.readAsText(file);
@@ -1114,7 +1286,7 @@ function renderSchemaReport() {
 
 let _toastTimer = null;
 function toast(msg) {
-  const el = document.getElementById('toast'); if (!el) { alert(msg); return; }
+  const el = document.getElementById('toast'); if (!el) { uiAlert(msg); return; }
   el.textContent = msg; el.classList.add('show');
   clearTimeout(_toastTimer); _toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
@@ -1125,7 +1297,7 @@ function requestPrint(pageId) {
   if (!userCanSee(CURRENT_USER, pageId)) return;
   const code = (CONFIG.printCodes[pageId] || '').trim();
   const label = (PAGES.find(p => p.id === pageId) || {}).label || ({ presence: 'Présence', journal: 'Journal' })[pageId] || pageId;
-  if (!code) { alert('L\'impression de la page « ' + label + ' » n\'est pas activée : aucun code défini dans Paramètres.'); return; }
+  if (!code) { uiAlert('Aucun code d\'impression n\'est défini pour la page « ' + label + ' ».' + (CURRENT_USER && CURRENT_USER.admin ? '\n\nDéfinis-en un dans Paramètres → Codes d\'impression.' : '\n\nDemande à un administrateur de l\'activer.'), { type: 'warn', title: 'Impression non activée' }); return; }
   PRINT_TARGET = pageId;
   document.getElementById('printModalText').textContent = 'Saisis le code d\'impression de la page « ' + label + ' ».';
   document.getElementById('printCodeInput').value = ''; document.getElementById('printErr').textContent = '';
@@ -1215,8 +1387,8 @@ async function initApp() {
   document.getElementById('loginScreen').style.display = 'flex';
   if (SESYON) {
     try { ouvrirSession(await tablo('mwen')); auditSessionStart(); enterApp(); return; }
-    catch { setSesyon(null); CURRENT_USER = null; }
-  }
+    catch (e) { if (e.reseau && hlRestaurer()) { auditSessionStart(); enterApp(); return; } setSesyon(null); CURRENT_USER = null; }
+  } else if (!navigator.onLine && hlRestaurer()) { auditSessionStart(); enterApp(); return; }
   if (await showSetupIfNeeded()) return;
   document.getElementById('loginUser').focus();
 }
@@ -1238,7 +1410,7 @@ async function confirmReset() {
   let vr = { ok: false }; try { vr = await tablo('verifye', { non: CURRENT_USER.name, modpas: pwd }); } catch (e) { err.textContent = e.message; return; }
   if (!vr.ok) { err.textContent = vr['erè'] || 'Mot de passe incorrect.'; logEvent('parametres', 'Réinitialisation du poste REFUSÉE — mot de passe incorrect'); return; }
   const keepToken = document.getElementById('resetKeepToken').checked, keepSettings = document.getElementById('resetKeepSettings').checked;
-  if (!confirm('Confirmer la remise à zéro de ce poste ?\n\nSeront effacés : cache des transactions, journal d\'activité, pointages locaux, préférences d\'affichage et d\'impression.\nSeront conservés : utilisateurs et codes d\'impression' + (keepToken ? ', jeton' : '') + (keepSettings ? ', réglages (caisses, pointage)' : '') + '.\n\nLe fichier se rechargera ensuite.')) return;
+  if (!(await uiConfirm('Seront effacés : cache des transactions, journal d\'activité, pointages locaux, préférences d\'affichage et d\'impression.\nSeront conservés : codes d\'impression' + (keepSettings ? ', réglages (caisses, pointage)' : '') + '.\n\nLe fichier se rechargera ensuite.', { type: 'danger', title: 'Remettre ce poste à zéro ?', ok: 'Remettre à zéro' }))) return;
   const btn = document.getElementById('resetBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Réinitialisation…'; }
   // 1) envoyer ce qui est encore en attente (pointages), puis journaliser l'opération dans Airtable avant l'effacement
   try { if (typeof presFlush === 'function') await presFlush(true); } catch {}
@@ -1285,8 +1457,8 @@ function renderServiceBar() {
 }
 // Changer de service en cours de route : chaque service a son propre cache, donc on recharge ses données.
 async function switchService(cle) {
-  if (SYNC_RUNNING) { alert('Une synchronisation est en cours — réessaie dans un instant.'); return; }
-  if (!confirm(`Passer au service ${SERVICES[cle].label} ? Les données de ${SVC().label} restent en mémoire et reviendront instantanément.`)) return;
+  if (SYNC_RUNNING) { uiAlert('Une synchronisation est en cours — réessaie dans un instant.', { type: 'warn', title: 'Patiente un instant' }); return; }
+  if (!(await uiConfirm(`Les données de ${SVC().label} restent en mémoire et reviendront instantanément.`, { title: `Passer au service ${SERVICES[cle].label} ?`, type: 'info', ok: 'Changer de service' }))) return;
   setService(cle);
   DATA = {}; MASTER_INDEX = []; ALERTS_LIST = []; DAILY_DATA = {}; EXCEDENTS = []; DATA_READY = false;
   SNAP.byDay = {}; SNAP.days = [];
@@ -1583,7 +1755,7 @@ async function airtableGet(baseId, url) {
     } catch (netErr) {
       // « Failed to fetch » : coupure Wi-Fi, connexion fermée par Airtable, onglet mis en veille.
       // C'est presque toujours passager : on attend et on recommence au lieu de perdre le mois.
-      if (attempt < 5) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
+      if (attempt < 5 && !HORS_LIGNE) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
       const e = new Error(`Connexion interrompue (${String(netErr.message || netErr).slice(0, 60)}) sur ${baseId}`);
       e.reseau = true; throw e;
     }
@@ -2015,6 +2187,7 @@ function servicePortee(schema) {
 }
 // État de la dernière connexion Airtable, lisible depuis l'écran de connexion (avant même d'être identifié)
 function setConnState(ok, msg, auth) {
+  if (HORS_LIGNE) return; // hors ligne : l'échec attendu ne doit pas être affiché comme une panne
   try { localStorage.setItem('bwat_conn', JSON.stringify({ ok: !!ok, msg: msg || '', auth: !!auth, t: Date.now() })); } catch {}
   if (typeof renderLoginConn === 'function') renderLoginConn();
 }
@@ -2969,6 +3142,7 @@ function renderSyncBanner(failed) {
   const el = document.getElementById('syncBanner');
   if (!el) return;
   failed = failed || [];
+  if (HORS_LIGNE) { el.style.display = 'none'; el.innerHTML = ''; return; } // hors ligne : le bandeau jaune suffit
   if (!failed.length && !SYNC_ISSUES.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   const parts = [];
   if (SYNC_ISSUES.length) parts.push(`<b>⛔ Lecture incomplète sur ${SYNC_ISSUES.length} base(s) : ${esc(SYNC_ISSUES.map(i => i.label).join(', '))}</b>Les données précédentes de ces mois ont été conservées (aucune ligne perdue), mais elles peuvent ne pas contenir les toutes dernières transactions. Relance une resynchronisation complète ; si le message revient, préviens l'administrateur avant d'utiliser les totaux.`);
@@ -3182,7 +3356,7 @@ function renderSimulateur(compte) {
       <div class="actions-bar screen-only">
         <button class="secondary" onclick="requestPrint('simulateur')">🖨 Imprimer</button>
         ${verifBtn(compte)}
-        <button class="secondary danger" onclick="if(confirm('Annuler toutes les corrections locales de ce compte ?')){clearOverrides('${jsq(compte)}');logEvent('simulation','Corrections réinitialisées',{compte:'${jsq(compte)}'});renderSimulateur('${jsq(compte)}')}">Réinitialiser les corrections${nbCorr ? ` (${nbCorr})` : ''}</button>
+        <button class="secondary danger" onclick="uiConfirm('Toutes les corrections simulées de ce compte seront effacées.', { type: 'danger', title: 'Réinitialiser les corrections ?', ok: 'Réinitialiser' }).then(ok => { if (ok) { clearOverrides('${jsq(compte)}');logEvent('simulation','Corrections réinitialisées',{compte:'${jsq(compte)}'});renderSimulateur('${jsq(compte)}') } })">Réinitialiser les corrections${nbCorr ? ` (${nbCorr})` : ''}</button>
         <span class="muted">Clique sur un montant pour le corriger : le solde théorique se recalcule en cascade, et une correction du solde déclaré décale les lignes suivantes du même écart. Les corrections restent locales (navigateur) et ne modifient pas Airtable.</span>
       </div>
       ${verifBoxDiv()}
@@ -4400,7 +4574,7 @@ function journalExport() {
   logEvent('parametres', 'Export du journal d\'activité');
 }
 async function journalPurge() {
-  if (!confirm('Vider définitivement le journal d\'activité de ce poste ?')) return;
+  if (!(await uiConfirm('Le journal d\'activité de ce poste sera effacé définitivement.', { type: 'danger', title: 'Vider le journal ?', ok: 'Vider' }))) return;
   const db = await auditDb(); if (db && db.objectStoreNames.contains('audit')) await new Promise(res => { const tx = db.transaction('audit', 'readwrite'); tx.objectStore('audit').clear(); tx.oncomplete = res; tx.onerror = res; });
   AUDIT = []; _auditPending = [];
   logEvent('parametres', 'Journal d\'activité vidé');
@@ -4796,7 +4970,7 @@ async function fraisSetStatut(rid, statut) {
   const m = FR.marks[rid] || {};
   let note = m.note || '';
   if (statut === 'Validé - frais légitime' || statut === 'Sans suite') {
-    const saisie = prompt('Motif (visible par tous les postes) :', note || '');
+    const saisie = await uiPrompt('Ce motif sera visible par tous les postes.', note || '', { title: 'Motif', placeholder: 'Motif…' });
     if (saisie === null) return;
     note = saisie;
   }
@@ -5120,7 +5294,7 @@ async function perfDaterCorrections(mem) {
 // est inscrite : la date part dans « Date resorption » et « Date correction » est vidée.
 async function perfReparerDates() {
   if (PERF.running) return;
-  if (!confirm("Réparer les dates ?\n\nLes lignes dont l'irrégularité existe encore dans le calcul mais qui portent une date de correction verront cette date déplacée vers « Date resorption ». Les lignes réellement corrigées ne sont pas touchées.")) return;
+  if (!(await uiConfirm("Les lignes dont l'irrégularité existe encore dans le calcul mais qui portent une date de correction verront cette date déplacée vers « Date resorption ». Les lignes réellement corrigées ne sont pas touchées.", { title: 'Réparer les dates ?', ok: 'Réparer' }))) return;
   PERF.running = true; PERF.error = null; renderPerfBox();
   try {
     TOKEN = (CONFIG.token || '').trim();
