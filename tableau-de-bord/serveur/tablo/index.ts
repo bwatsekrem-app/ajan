@@ -13,6 +13,7 @@
 //   modifye { uid, non, role, pages, modpas? }                (admin)
 //   efase { uid }                                             (admin)
 //   airtable { metod, chemen, ko? }       → repons Airtable la jan l ye a
+//   sove_paramet { paramet }                                   (admin) paramèt pataje ant tout pòs yo
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
@@ -30,6 +31,13 @@ const WOL = ["admin", "superviseur", "traitement", "validation"];
 const PAJ = ["releve", "alertes", "quotidien", "simulateur", "excedents", "portefeuilles", "evolution", "frais"];
 const DIRE_SESYON = 12 * 3600 * 1000;
 const MODPAS_MIN = 8;
+// Paramèt ki pataje ant tout pòs yo (kòd enpresyon, caisses, pwen prezans, Performance)
+const KLE_PARAMET = ["printCodes", "caisses", "presence", "perfAuto", "perfJours", "perfPortee", "snapshots"];
+async function liParamet() {
+  const { data } = await db.from("tablo_konfig").select("vale").eq("kle", "paramet_pataje").maybeSingle();
+  if (!data) return null;
+  try { return JSON.parse(data.vale); } catch { return null; }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -135,7 +143,7 @@ Deno.serve(async (req) => {
       const v = await verifye(b.non, b.modpas);
       if (!v.ok) return rep(401, { erè: erèVerifye(v) });
       const { data: u } = await db.from("tablo_itilizate").select("*").eq("id", v.id).single();
-      return rep(200, { sesyon: await siyen(u.id, u.modpas_hash), mwen: piblik(u), itilizate: await tout() });
+      return rep(200, { sesyon: await siyen(u.id, u.modpas_hash), mwen: piblik(u), itilizate: await tout(), paramet: await liParamet() });
     }
 
     // ----- Fòk ou konekte -----
@@ -162,7 +170,7 @@ Deno.serve(async (req) => {
         ...(r.headers.get("retry-after") ? { "Retry-After": r.headers.get("retry-after")! } : {}) } });
     }
 
-    if (aksyon === "mwen") return rep(200, { mwen: piblik(mwen), itilizate: await tout() });
+    if (aksyon === "mwen") return rep(200, { mwen: piblik(mwen), itilizate: await tout(), paramet: await liParamet() });
 
     if (aksyon === "verifye") {
       const v = await verifye(b.non, b.modpas);
@@ -183,6 +191,16 @@ Deno.serve(async (req) => {
 
     // ----- Admin sèlman -----
     if (!seAdmin) return rep(403, { erè: "Réservé aux administrateurs." });
+    if (aksyon === "sove_paramet") {
+      const p = b.paramet && typeof b.paramet === "object" ? b.paramet : {};
+      const pwòp: Record<string, unknown> = {};
+      for (const k of KLE_PARAMET) if (k in p) pwòp[k] = p[k];
+      const vale = JSON.stringify(pwòp);
+      if (vale.length > 50000) return rep(400, { erè: "Paramètres trop volumineux." });
+      const { error } = await db.from("tablo_konfig").upsert({ kle: "paramet_pataje", vale, updated_at: new Date().toISOString() });
+      if (error) return rep(500, { erè: error.message });
+      return rep(200, { ok: true });
+    }
     const role = String(b.role || "");
     const nbAdmin = async () => (await db.from("tablo_itilizate").select("id", { count: "exact", head: true }).eq("role", "admin").eq("aktif", true)).count || 0;
 

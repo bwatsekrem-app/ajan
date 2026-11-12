@@ -567,6 +567,11 @@
           <button class="secondary" style="margin-top:8px;" onclick="saveCaisses()">Enregistrer les regroupements</button>
         </div>
         <div class="card">
+          <h3>Ce poste</h3>
+          <label style="display:flex; gap:8px; align-items:flex-start; font-weight:600;"><input type="checkbox" id="postePartage" style="margin-top:3px;" onchange="setPostePartage(this.checked)"> Poste partagé (plusieurs personnes utilisent cet ordinateur)</label>
+          <p class="muted" style="margin:6px 0 0;">À chaque déconnexion, les transactions gardées sur ce poste sont effacées : personne ne peut les lire sans se connecter. La connexion hors ligne est désactivée et la synchronisation suivante est complète (plus longue). Les pointages en attente sont conservés.</p>
+        </div>
+        <div class="card">
           <h3>Identifiants permanents</h3>
           <p class="muted">Chaque utilisateur possède un <b>ID permanent</b> (colonne de la liste des utilisateurs) qui ne change jamais, même si son nom est modifié : il figure sur chaque impression et dans le Journal. Ce poste (navigateur) porte l'identifiant <b class="mono" id="deviceIdText"></b>, lui aussi imprimé et journalisé.</p>
         </div>
@@ -879,6 +884,7 @@ function saveConfig() {
   const copy = JSON.parse(JSON.stringify(CONFIG));
   delete copy.token; delete copy.users; // jamais stockés sur le poste
   try { localStorage.setItem(CONFIG_KEY, JSON.stringify(copy)); } catch (e) { alert('Impossible d\'enregistrer la configuration : ' + e.message); }
+  if (_paramAppliques && typeof pousserParametres === 'function') pousserParametres();
 }
 function findUser(name) { const n = (name || '').trim().toLowerCase(); return CONFIG.users.find(u => u.name.toLowerCase() === n) || null; }
 function userCanSee(u, pageId) { return !!u && (u.admin || (u.pages || []).includes(pageId)); }
@@ -925,6 +931,21 @@ function ouvrirSession(j) {
   CONFIG.users = j.itilizate || [];
   CONFIG.token = 'serveur'; if (typeof TOKEN !== 'undefined') TOKEN = 'serveur';
   CURRENT_USER = findUser(j.mwen.name) || j.mwen;
+  if (j.paramet) { appliquerParametres(j.paramet); saveConfig(); }
+  else { _paramAppliques = true; if (CURRENT_USER.admin) pousserParametres(); } // 1re fois : les réglages de ce poste deviennent ceux de tous
+}
+// Paramètres partagés par tous les postes (conservés sur le serveur ; l'administrateur les modifie).
+const CLES_PARTAGEES = ['printCodes', 'caisses', 'presence', 'perfAuto', 'perfJours', 'perfPortee', 'snapshots'];
+let _paramAppliques = false, _paramTimer = null;
+function partieParametres() { const o = {}; for (const k of CLES_PARTAGEES) if (CONFIG[k] !== undefined) o[k] = CONFIG[k]; return o; }
+function appliquerParametres(p) {
+  if (p && typeof p === 'object') { for (const k of CLES_PARTAGEES) if (k in p) CONFIG[k] = p[k]; if (!CONFIG.printCodes) CONFIG.printCodes = {}; }
+  _paramAppliques = true;
+}
+function pousserParametres() {
+  if (!CURRENT_USER || !CURRENT_USER.admin || HORS_LIGNE || !SESYON) return;
+  clearTimeout(_paramTimer);
+  _paramTimer = setTimeout(() => { tablo('sove_paramet', { paramet: partieParametres() }).catch(e => toast('⚠️ Paramètres non partagés : ' + e.message)); }, 600);
 }
 function anciensComptes() { try { return JSON.parse(localStorage.getItem('bwat_anciens_comptes') || '[]'); } catch { return []; } }
 
@@ -943,7 +964,7 @@ async function hlEmpreinte(pw, saltHex) {
   return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 async function hlMemoriser(pw) {
-  if (!CURRENT_USER || !window.crypto || !crypto.subtle) return;
+  if (!CURRENT_USER || !window.crypto || !crypto.subtle || postePartage()) return; // poste partagé : pas de connexion hors ligne
   try {
     const salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
     const t = hlTout();
@@ -1049,7 +1070,29 @@ async function doLogin() {
   auditSessionStart();
   enterApp();
 }
+function postePartage() { try { return localStorage.getItem('bwat_poste_partage') === '1'; } catch { return false; } }
+function setPostePartage(on) {
+  try { if (on) localStorage.setItem('bwat_poste_partage', '1'); else localStorage.removeItem('bwat_poste_partage'); } catch {}
+  if (on) hlEcrire({});
+  toast(on ? 'Poste partagé : les données seront effacées à chaque déconnexion.' : 'Poste personnel : les données restent sur ce poste.');
+  logEvent('parametres', 'Poste partagé : ' + (on ? 'activé' : 'désactivé'));
+}
+// Poste partagé : à la déconnexion, on efface tout ce qui permettrait de lire les données sans compte
+// (cache des transactions, empreintes hors ligne, simulations, archives). Les pointages en attente et l'ID du poste restent.
+async function effacerDonneesPoste() {
+  try { await cacheClear(); } catch {}
+  hlEcrire({});
+  try { for (const k of Object.keys(localStorage)) if (/^bwat_(sim|printcols_|anciens_comptes|conn)/.test(k)) localStorage.removeItem(k); } catch {}
+  try { sessionStorage.clear(); } catch {}
+}
 function doLogout() {
+  if (postePartage() && CURRENT_USER) {
+    presLog('fermeture', 'Déconnexion'); presStop();
+    auditSessionEnd('Déconnexion');
+    Promise.resolve(presFlush(true)).catch(() => {}).then(effacerDonneesPoste).then(() => location.reload());
+    CURRENT_USER = null; document.getElementById('appShell').style.display = 'none';
+    return;
+  }
   presLog('fermeture', 'Déconnexion'); presStop(); presFlush(true);
   auditSessionEnd('Déconnexion');
   CURRENT_USER = null; CURRENT_PAGE = null; RELEVE_COMPTE = null; SIM_COMPTE = null;
@@ -1111,6 +1154,7 @@ function renderSettings() {
   for (const p of PAGES.concat([{ id: 'presence' }])) document.getElementById('code-' + p.id).value = CONFIG.printCodes[p.id] || '';
   renderUsers(); resetUserForm(); refreshCacheNote(); renderSchemaReport(); renderCaisses(); renderPresenceSettings();
   const dv = document.getElementById('deviceIdText'); if (dv) dv.textContent = deviceId();
+  const pp = document.getElementById('postePartage'); if (pp) pp.checked = postePartage();
 }
 function saveToken() {
   const t = document.getElementById('tokenInput').value.trim();
@@ -1669,6 +1713,7 @@ async function decouvrirMois() {
     const nom = String(b.name || '');
     const m = nom.match(/^\s*transactions\s*\|\s*(.+?)\s*$/i);
     if (!m || connus.has(b.id)) continue;
+    if (/copie|copy|blank|test|\(/i.test(m[1])) continue; // « Transactions | Oct 2026 (copie) », modèles vides…
     const d = moisDepuisNom(m[1]);
     if (!d || cleMois(d) <= dernier) continue;
     trouves.push({ label: `${MOIS_LONG[d.mois - 1]} ${d.annee}`, baseId: b.id, cle: cleMois(d) });
