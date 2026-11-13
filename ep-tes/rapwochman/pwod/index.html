@@ -106,7 +106,7 @@ td.okc{color:var(--ok);font-weight:600}
 td.okc::before{content:"✓ ";font-weight:700}
 .okc{color:var(--ok)}
 .na{color:var(--mut)}
-.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:650;vertical-align:middle;margin-left:4px}
+.chip{display:inline-block;white-space:nowrap;margin-bottom:2px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:650;vertical-align:middle;margin-left:4px}
 .chip.er{background:var(--erb);color:var(--er)}.chip.ok{background:var(--okb);color:var(--ok)}.chip.av{background:var(--avb);color:var(--av)}
 .err{background:var(--erb);color:var(--er);padding:10px 12px;border-radius:10px;margin-top:10px;white-space:pre-wrap;border:1px solid color-mix(in srgb,var(--er) 25%,transparent)}
 .note{font-size:12.5px;color:var(--mut);margin-top:8px;line-height:1.55}
@@ -115,6 +115,8 @@ td.okc::before{content:"✓ ";font-weight:700}
 .kol3>*{min-width:0}
 .wrap.lis2{max-height:50vh}
 th.tl,td.tl{text-align:left}
+.spT td.tl{white-space:normal;min-width:110px}
+.spT td{padding-left:8px;padding-right:8px}
 .vid{text-align:center;padding:48px 20px;color:var(--mut)}
 .vid svg{width:44px;height:44px;opacity:.5;margin-bottom:10px}
 /* Fenèt */
@@ -198,6 +200,8 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       <button data-t="jeneral" class="on">Rezime</button>
       <button data-t="ajan">Pa ajan</button>
       <button data-t="jou">Pa jou</button>
+      <button data-t="kont">Balans kont</button>
+      <button data-t="sispe">Erè sezi</button>
       <button data-t="sync">⇄ Synchro</button>
       <button data-t="koresp">Ajan</button>
       <span class="aksyon"><button id="csv">⤓ CSV</button><button id="enprime">⎙ Enprime</button></span>
@@ -427,6 +431,8 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   function rann() {
     document.querySelectorAll("#tabs [data-t]").forEach((b) => b.classList.toggle("on", b.dataset.t === st.tab));
     if (st.tab === "sync") return vSync();
+    if (st.tab === "kont") return vKont();
+    if (st.tab === "sispe") return vSispe();
     const K = kalkile();
     if (!K) { $("vi").innerHTML = `<div class="kat vid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg><div><b>Chwazi yon peryòd</b>, epi klike « Chaje ».</div></div>`; return; }
     st.K = K;
@@ -582,6 +588,105 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   }
 
   // ================= Onglè 2 : Synchro Supabase ↔ baz Airtable mwa yo =================
+  // ================= Balans pa kont : Supabase ↔ Airtable « Compte Epargne » =================
+  const KB = { data: null, filt: "ekar", q: "", lè: null };
+  async function chajeKont() {
+    $("kbEta").innerHTML = `<div class="note">Ap li balans Supabase ak Airtable yo… (kèk segonn)</div>`;
+    try {
+      const [s, a] = await Promise.all([sb.rpc("rapw_kont_balans"), fnReseye({ aksyon: "kont" })]);
+      if (s.error) throw new Error(s.error.message);
+      const M = new Map();
+      for (const x of s.data || []) M.set(x.kod, { kod: x.kod, sb: x });
+      for (const x of a.kont || []) { if (!x.kod) continue; const o = M.get(x.kod) || { kod: x.kod }; o.at = x; M.set(x.kod, o); }
+      const lis = [];
+      for (const o of M.values()) {
+        if (!o.sb && (!o.at || !o.at.solde)) continue; // kont Airtable vid ki pa sou Supabase : pa enpòtan
+        o.ref = o.sb ? o.sb.solde - o.sb.pa_voye : null;
+        o.ekar = o.sb && o.at && o.at.solde !== null ? Math.round(o.at.solde - o.ref) : null;
+        o.eta = !o.sb ? "pa_sb" : !o.at ? "pa_at" : o.ekar === 0 ? "ok" : "ekar";
+        lis.push(o);
+      }
+      KB.data = { lis, koupe: a.koupe }; KB.lè = new Date().toLocaleTimeString("fr-FR");
+    } catch (e) { $("kbEta").innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+    rannKont();
+  }
+  function vKont() {
+    $("vi").innerHTML = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Balans pa kont · Supabase ↔ Airtable</h2>
+      <button class="pri noprint" id="kbChe">${KB.data ? "Rechaje" : "Chaje balans yo"}</button></div>
+      <div class="note">Konpare balans chak kont Epargne (A-BSI) sou Supabase ak <b>Solde Definitif</b> kont lan nan Airtable « Compte Epargne » (kolektè sync yo : Sedeline, Ketsia).
+      Tranzaksyon app la ki <b>valide men poko voye</b> sou Airtable (onglè Synchro) poko nan Airtable : nou retire yo anvan nou konpare.
+      <b>Ekar</b> = Airtable − (Supabase valide − valide poko voye). Ekar pozitif : Airtable gen plis (liy Importation ki pa sou Supabase, oswa doub nan Airtable). Ekar negatif : Supabase gen plis.</div>
+      <div id="kbEta"></div></div><div id="kbV"></div>`;
+    $("kbChe").onclick = chajeKont;
+    if (KB.data) rannKont();
+  }
+  function rannKont() {
+    const L = KB.data.lis, c = (e) => L.filter((o) => o.eta === e).length;
+    const ekT = L.filter((o) => o.eta === "ekar").reduce((a, o) => a + Math.abs(o.ekar), 0);
+    $("kbEta").innerHTML = `<div class="note">Chaje a ${esc(KB.lè)}${KB.data.koupe ? ' · <span class="chip av">Airtable : gen plis kont pase limit lan</span>' : ""}</div>`;
+    let h = `<div class="kpi">
+      <div class="k ${c("ekar") ? "er" : "ok"}"><div class="l">Kont ki gen ekar</div><div class="v">${c("ekar")}</div><div class="s">${nf(ekT)} G an tout (valè absoli)</div></div>
+      <div class="k ok"><div class="l">Kont balanse</div><div class="v">${c("ok")}</div><div class="s">sou ${c("ok") + c("ekar")} kont ki nan de bò yo</div></div>
+      <div class="k ${c("pa_sb") ? "av" : "ok"}"><div class="l">Pa sou Supabase</div><div class="v">${c("pa_sb")}</div><div class="s">Kont Airtable ak balans, ki poko enpòte</div></div>
+      <div class="k ${c("pa_at") ? "av" : "ak"}"><div class="l">Pa jwenn nan Airtable</div><div class="v">${c("pa_at")}</div><div class="s">Kolektè pa defo a pa Sedeline/Ketsia, oswa nimewo a diferan</div></div></div>`;
+    const F = [["ekar", "Ekar"], ["pa_sb", "Pa sou Supabase"], ["pa_at", "Pa nan Airtable"], ["ok", "Balanse"], ["tout", "Tout"]];
+    h += `<div class="kat"><div class="filt noprint" style="margin-bottom:12px"><div class="chips">${F.map(([k, l]) => `<button data-kf="${k}" ${KB.filt === k ? 'style="background:var(--kat);color:var(--tx);box-shadow:var(--om)"' : ""}>${l}</button>`).join("")}</div>
+      <label>Chèche<input id="kbQ" placeholder="Kont, kliyan, ajan…" value="${esc(KB.q)}"></label></div>`;
+    const q = KB.q.trim().toLowerCase();
+    const V = L.filter((o) => (KB.filt === "tout" || o.eta === KB.filt) && (!q || [o.kod, o.sb?.kliyan, o.at?.non, o.sb?.ajan, o.at?.kolekte].some((x) => String(x || "").toLowerCase().includes(q))))
+      .sort((a, b) => Math.abs(b.ekar || 0) - Math.abs(a.ekar || 0) || a.kod.localeCompare(b.kod));
+    h += V.length ? `<div class="wrap"><table><tr><th>Kont</th><th class="tl">Kliyan</th><th class="tl">Ajan</th><th>Supabase valide</th><th title="Depo/retrè ki poko valide pa Kès">An atant</th><th title="Valide sou Supabase men poko voye sou Airtable">Valide poko voye</th><th class="imp">Supabase konparab</th><th>Airtable</th><th>Ekar</th><th>Dènye tx</th></tr>${V.map((o) => {
+        const s = o.sb, a = o.at;
+        const ek = o.eta === "ekar" ? `<td class="ekar">${o.ekar > 0 ? "+" : ""}${nf(o.ekar)}</td>` : o.eta === "ok" ? `<td class="okc">0</td>` : `<td><span class="chip av">${o.eta === "pa_sb" ? "pa sou Supabase" : "pa nan Airtable"}</span></td>`;
+        return `<tr><td>${esc(o.kod)}</td><td class="tl">${esc(s?.kliyan || a?.non || "")}</td><td class="tl">${esc(s?.ajan || a?.kolekte || "")}</td>
+          <td>${s ? nf(s.solde) : '<span class="na">—</span>'}</td><td>${s && s.n_atant ? `${nf(s.atant)} <span class="mut">(${s.n_atant})</span>` : s ? "0" : '<span class="na">—</span>'}</td>
+          <td>${s && s.n_pa_voye ? `${nf(s.pa_voye)} <span class="mut">(${s.n_pa_voye})</span>` : s ? "0" : '<span class="na">—</span>'}</td><td class="imp">${s ? nf(o.ref) : '<span class="na">—</span>'}</td>
+          <td>${a && a.solde !== null ? nf(a.solde) : '<span class="na">—</span>'}</td>${ek}<td>${s?.denye ? fd(s.denye) : ""}</td></tr>`; }).join("")}</table></div>`
+      : `<div class="note okc">Okenn kont nan filt sa a.</div>`;
+    $("kbV").innerHTML = h + `</div>`;
+    $("kbV").querySelectorAll("[data-kf]").forEach((b) => (b.onclick = () => { KB.filt = b.dataset.kf; rannKont(); }));
+    $("kbQ").oninput = (e) => { KB.q = e.target.value; clearTimeout(KB.t); KB.t = setTimeout(() => { rannKont(); const i = $("kbQ"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  }
+
+  // ================= Erè sezi : tranzaksyon app la ki sispèk =================
+  const SP = { data: null, per: "" };
+  const REZ = {
+    chanje_plas: ["Montan = dènye balans kanè", "er", "Ajan an sanble mete balans kanè a nan plas montan an (chif yo chanje plas)."],
+    kalkil: ["Avan ± montan ≠ apre", "er", "Balans kanè avan + montan pa bay balans apre a."],
+    avan_pa_swiv: ["Kanè avan ≠ dènye kanè", "av", "Balans kanè avan an pa menm ak dènye balans kanè ki te deklare sou kont lan."],
+    two_gwo: ["Montan twò gwo", "av", "Montan an twò gwo pou plan kont lan (≥ 20 fwa plan an, oswa ≥ 50 000 G pou Plan Lib)."],
+    balans_vid: ["San balans kanè", "av", "Depo/retrè san balans kanè avan oswa apre."],
+  };
+  async function chajeSispe() {
+    $("spEta").innerHTML = `<div class="note">Ap chèche…</div>`;
+    const { data, error } = await sb.rpc("rapw_sispe", { p_deb: $("deb").value, p_fen: $("fen").value });
+    if (error) { $("spEta").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    SP.data = data || []; SP.per = `${fd($("deb").value)} → ${fd($("fen").value)}`; rannSispe();
+  }
+  function vSispe() {
+    $("vi").innerHTML = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Erè sezi · tranzaksyon app la ki sispèk</h2>
+      <button class="pri noprint" id="spChe">Chèche</button></div>
+      <div class="note">Peryòd : ${fd($("deb").value)} → ${fd($("fen").value)} (chanje l anlè a). Depo ak retrè Epargne ajan yo antre nan app la (pa istorik Airtable).
+      Sistèm nan konpare chak tranzaksyon ak <b>dènye balans kanè</b> ki te deklare sou kont lan, ak plan kont lan.</div><div id="spEta"></div></div><div id="spV"></div>`;
+    $("spChe").onclick = chajeSispe;
+    if (SP.data) rannSispe();
+  }
+  function rannSispe() {
+    const L = SP.data, n = (r) => L.filter((x) => x.rezon.includes(r)).length;
+    $("spEta").innerHTML = `<div class="note">${L.length} tranzaksyon sispèk · ${esc(SP.per)}</div>`;
+    let h = `<div class="kpi">${Object.entries(REZ).map(([k, [l, c, t]]) => `<div class="k ${n(k) ? c : "ok"}" title="${esc(t)}"><div class="l">${esc(l)}</div><div class="v">${n(k)}</div><div class="s">${esc(t)}</div></div>`).join("")}</div>`;
+    const grav = (x) => x.rezon.reduce((a, r) => a + (REZ[r]?.[1] === "er" ? 10 : 1), 0) + (x.st === "pending" ? 0.5 : 0);
+    const V = [...L].sort((a, b) => grav(b) - grav(a) || String(b.le).localeCompare(String(a.le)));
+    h += `<div class="kat">${V.length ? `<div class="wrap"><table class="spT"><tr><th>Dat</th><th class="tl">Kont</th><th class="tl">Kliyan</th><th class="tl">Ajan</th><th>Tip</th><th>Montan</th><th>Kanè avan</th><th>Kanè apre</th><th title="Dènye balans kanè ki te deklare sou kont lan anvan tranzaksyon sa a">Dènye kanè</th><th>Estati</th><th class="tl" style="min-width:170px">Siy</th></tr>${V.map((x) =>
+      `<tr><td>${fd(String(x.le).slice(0, 10))} <span class="mut">${String(x.le).slice(11, 16)}</span></td><td class="tl" style="white-space:nowrap">${esc(x.kod || x.no_compte || "")}</td><td class="tl">${esc(x.kliyan)}</td><td class="tl">${esc(x.ajan || "")}</td>
+        <td>${x.tip === "D" ? "Depo" : "Retrè"}</td><td><b>${nf(x.montan)}</b></td><td>${nf(x.dav)}</td><td>${nf(x.dap)}</td><td>${nf(x.prev)}</td>
+        <td>${x.st === "pending" ? '<span class="chip av">an atant</span>' : '<span class="chip ok">valide</span>'}${x.irr && x.irr !== "korije" ? ' <span class="chip er" title="Iregilarite">irr.</span>' : ""}</td>
+        <td class="tl" style="white-space:normal">${x.rezon.map((r) => `<span class="chip ${REZ[r]?.[1] || "av"}" title="${esc(REZ[r]?.[2] || "")}">${esc(REZ[r]?.[0] || r)}</span>`).join(" ")}</td></tr>`).join("")}</table></div>`
+      : `<div class="note okc">Okenn tranzaksyon sispèk nan peryòd sa a.</div>`}
+      <div class="note">Pou korije yon tranzaksyon : ajan an mande yon modifikasyon nan app la (responsab kès la oswa yon manadjè apwouve l).</div></div>`;
+    $("spV").innerHTML = h;
+  }
+
   async function fnSync(body) {
     const { data: s } = await sb.auth.getSession();
     if (!s.session) throw new Error("Sesyon an fini : konekte ankò");
@@ -625,14 +730,18 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
     $("syA").innerHTML = `<div class="note">Ap chèche…</div>`;
     const { data, error } = await sb.rpc("rapw_sync_lis", { p_deb: $("deb").value, p_fen: $("fen").value });
     if (error) { $("syA").innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
-    SY.sb = data; rannSb();
+    SY.sb = data;
+    // Baz mwa ki poko konfigire : mande fonksyon an chèche yo nan Airtable (« Transactions | <Mwa> <Ane> »)
+    const manke = [...new Set((data.tx || []).filter((t) => !t.rec && !t.v8).map((t) => t.mwa))].filter((m) => !(data.baz || {})[m]);
+    if (manke.length) { try { const r = await fnSync({ aksyon: "baz", mwa: manke }); SY.sb.baz = { ...(SY.sb.baz || {}), ...Object.fromEntries(Object.entries(r.baz || {}).filter(([, v]) => v)) }; } catch (_) {} }
+    rannSb();
   }
   function rannSb() {
     const tx = SY.sb.tx || [], poko = tx.filter((t) => !t.rec && !t.v8);
     const kol = (t) => t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
     let h = `<div class="note">${tx.length} tranzaksyon valide · <b>${poko.length} poko nan Airtable</b> · ${tx.length - poko.length} deja ladan l${SY.sb.an_atant ? ` · ${SY.sb.an_atant} depo poko valide pa Kès (yo p ap ale toutotan yo pa valide)` : ""}</div>`;
     const bazManke = [...new Set(poko.map((t) => t.mwa))].filter((m) => !(SY.sb.baz || {})[m]);
-    if (bazManke.length) h += `<div class="err">Baz Airtable pa konfigire pou : ${bazManke.join(", ")}</div>`;
+    if (bazManke.length) h += `<div class="err">Baz Airtable mwa ${bazManke.join(", ")} poko egziste nan Airtable (non « Transactions | Dec 2026 » pa egzanp). Depi ekip data a kreye l, zouti a ap jwenn li pou kont li.</div>`;
     if (tx.length) {
       h += `<div class="wrap"><table><tr><th><input type="checkbox" id="syTout" ${poko.length ? "" : "disabled"}></th><th>Dat</th><th>Kont</th><th>Kliyan</th><th>Kolòn Airtable</th><th>Montan</th><th>Solde</th><th>Kolektè</th><th>Estati</th></tr>`;
       for (const t of tx) {
