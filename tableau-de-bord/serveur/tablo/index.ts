@@ -14,6 +14,9 @@
 //   efase { uid }                                             (admin)
 //   airtable { metod, chemen, ko? }       → repons Airtable la jan l ye a
 //   sove_paramet { paramet }                                   (admin) paramèt pataje ant tout pòs yo
+//   konsomasyon                                                (admin) apèl pa jou / pa moun
+// Pwoteksyon konsomasyon : yon apèl « airtable » li jiska PAJ_PA_APEL paj Airtable (lis yo), e gen limit chak jou
+// pa moun (LIMIT_MOUN) ak pou tout tablo de bò a (LIMIT_TOTAL). Lè limit la rive, paj la sèvi ak kach li.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
@@ -31,6 +34,34 @@ const WOL = ["admin", "superviseur", "traitement", "validation"];
 const PAJ = ["releve", "alertes", "quotidien", "simulateur", "excedents", "portefeuilles", "evolution", "frais"];
 const DIRE_SESYON = 12 * 3600 * 1000;
 const MODPAS_MIN = 8;
+const PAJ_PA_APEL = 20;        // 20 paj × 100 liy = 2 000 liy pa apèl
+const LIMIT_MOUN = 3000;       // apèl « airtable » pa moun pa jou
+const LIMIT_TOTAL = 15000;     // apèl « airtable » pou tout moun pa jou (≈ 450 000 / mwa maksimòm)
+const dòmi = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// GET sou yon lis (dosye oswa baz) : li plizyè paj youn apre lòt (5 demann/segonn maks pa baz) epi voye yo ansanm.
+// Repons lan gen menm fòm ak Airtable : { records|bases: [...], offset? } — paj la kontinye ak offset la si genyen.
+async function liPlizyePaj(chemen: string, token: string) {
+  const u = new URL(AT + chemen);
+  const seLis = /^\/v0\/(meta\/bases|app[A-Za-z0-9]{14}\/[^/?#]+)$/.test(u.pathname) && !u.pathname.endsWith("/tables");
+  const h = { Authorization: `Bearer ${token}` };
+  const r0 = await fetch(u, { headers: h });
+  if (!seLis || !r0.ok) return { status: r0.status, body: await r0.text(), retry: r0.headers.get("retry-after") };
+  const j0 = await r0.json();
+  const kle = Array.isArray(j0.records) ? "records" : Array.isArray(j0.bases) ? "bases" : null;
+  if (!kle) return { status: 200, body: JSON.stringify(j0), retry: null };
+  const tout = [...j0[kle]];
+  let off: string | undefined = j0.offset, n = 1;
+  while (off && n < PAJ_PA_APEL) {
+    u.searchParams.set("offset", off);
+    await dòmi(210);
+    const r = await fetch(u, { headers: h });
+    if (!r.ok) break; // paj la ap mande rès la ak offset la
+    const j = await r.json();
+    tout.push(...(j[kle] || []));
+    off = j.offset; n++;
+  }
+  return { status: 200, body: JSON.stringify(off ? { [kle]: tout, offset: off } : { [kle]: tout }), retry: null };
+}
 // Paramèt ki pataje ant tout pòs yo (kòd enpresyon, caisses, pwen prezans, Performance)
 const KLE_PARAMET = ["printCodes", "caisses", "presence", "perfAuto", "perfJours", "perfPortee", "snapshots"];
 async function liParamet() {
@@ -161,10 +192,21 @@ Deno.serve(async (req) => {
         const m = chemen.match(CHEMEN_EKRI);
         if (!m || !EKRI_OTORIZE.has(decodeURIComponent(m[1]))) return rep(403, { error: { type: "ECRITURE_REFUSEE", message: "Écriture non autorisée sur cette base." } });
       } else return rep(403, { error: { type: "METHODE_REFUSEE", message: "Méthode non autorisée." } });
+      // Limit chak jou (anvan nou rele Airtable)
+      const { data: k } = await db.rpc("tablo_konte", { p_uid: mwen.uid, p_kantite: 1 });
+      if (k && (k.mwen > LIMIT_MOUN || k.total > LIMIT_TOTAL)) {
+        return rep(403, { error: { type: "QUOTA_JOURNALIER", message: k.mwen > LIMIT_MOUN
+          ? `Limite quotidienne atteinte pour ton compte (${LIMIT_MOUN} appels). Les données gardées sur ce poste restent affichées ; la synchronisation reprend demain.`
+          : `Limite quotidienne du tableau de bord atteinte (${LIMIT_TOTAL} appels). Les données gardées sur les postes restent affichées ; la synchronisation reprend demain.` } });
+      }
+      if (metod === "GET") {
+        const r = await liPlizyePaj(chemen, token);
+        return new Response(r.body, { status: r.status, headers: { ...cors, "Content-Type": "application/json", ...(r.retry ? { "Retry-After": r.retry } : {}) } });
+      }
       const r = await fetch(AT + chemen, {
         method: metod,
-        headers: { Authorization: `Bearer ${token}`, ...(metod === "PATCH" ? { "Content-Type": "application/json" } : {}) },
-        body: metod === "PATCH" ? String(b.ko ?? "") : undefined,
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: String(b.ko ?? ""),
       });
       return new Response(await r.text(), { status: r.status, headers: { ...cors, "Content-Type": "application/json",
         ...(r.headers.get("retry-after") ? { "Retry-After": r.headers.get("retry-after")! } : {}) } });
@@ -191,6 +233,11 @@ Deno.serve(async (req) => {
 
     // ----- Admin sèlman -----
     if (!seAdmin) return rep(403, { erè: "Réservé aux administrateurs." });
+    if (aksyon === "konsomasyon") {
+      const depi = new Date(Date.now() - 40 * 86400e3).toISOString().slice(0, 10);
+      const { data } = await db.from("tablo_konsomasyon").select("jou, uid, apel").gte("jou", depi).order("jou");
+      return rep(200, { ok: true, liy: data || [], limit_moun: LIMIT_MOUN, limit_total: LIMIT_TOTAL, paj_pa_apel: PAJ_PA_APEL });
+    }
     if (aksyon === "sove_paramet") {
       const p = b.paramet && typeof b.paramet === "object" ? b.paramet : {};
       const pwòp: Record<string, unknown> = {};

@@ -537,6 +537,7 @@
         </div>
         <div class="card">
           <h3>Synchronisation</h3>
+          <div class="note" id="consoNote"></div>
           <div class="note" id="cacheNote"></div>
           <div class="note" id="newBasesNote" style="color:var(--amber);"></div>
           <button class="primary block syncBtn" onclick="startSync(false)">Synchroniser (<span id="nbMois"></span> mois + registre)</button>
@@ -923,8 +924,31 @@ window.fetch = async function (input, init) {
     headers: { 'Content-Type': 'application/json', 'x-tablo-sesyon': SESYON || '' },
     body: JSON.stringify({ aksyon: 'airtable', metod: init.method || 'GET', chemen: url.slice('https://api.airtable.com'.length), ko: init.body }) });
   if (r.status === 401) { try { const j = await r.clone().json(); if (j.sesyon_fini) sesyonFini(); } catch {} }
+  if (r.status === 403 && !_quotaAverti) {
+    try {
+      const j = await r.clone().json();
+      if (j.error && j.error.type === 'QUOTA_JOURNALIER') { _quotaAverti = true; uiAlert(j.error.message, { type: 'warn', title: 'Limite quotidienne atteinte' }); }
+    } catch {}
+  }
   return r;
 };
+let _quotaAverti = false;
+// ---- Consommation du serveur (admin) : appels Airtable par jour, limites quotidiennes
+async function renderConso() {
+  const el = document.getElementById('consoNote'); if (!el || !CURRENT_USER || !CURRENT_USER.admin || HORS_LIGNE) return;
+  try {
+    const j = await tablo('konsomasyon');
+    const auj = new Date(Date.now() - 4 * 3600e3).toISOString().slice(0, 10), mois = auj.slice(0, 7);
+    const jour = {}, moi = {}; let totMois = 0;
+    for (const l of j.liy) { jour[l.jou] = (jour[l.jou] || 0) + l.apel; if (l.jou.startsWith(mois)) totMois += l.apel; if (l.jou === auj) moi[l.uid] = (moi[l.uid] || 0) + l.apel; }
+    const nom = uid => { const u = CONFIG.users.find(x => x.uid === uid); return u ? u.name : uid; };
+    const jours = Object.keys(jour).sort().slice(-7);
+    el.innerHTML = `<b>Appels serveur aujourd'hui :</b> ${(jour[auj] || 0).toLocaleString('fr-FR')} / ${j.limit_total.toLocaleString('fr-FR')} (limite par personne : ${j.limit_moun.toLocaleString('fr-FR')}) · <b>ce mois :</b> ${totMois.toLocaleString('fr-FR')}`
+      + (Object.keys(moi).length ? `<div class="muted" style="font-size:11.5px;">Aujourd'hui : ${Object.entries(moi).sort((a, b) => b[1] - a[1]).map(([u, n]) => esc(nom(u)) + ' ' + n).join(' · ')}</div>` : '')
+      + (jours.length ? `<div class="muted" style="font-size:11.5px;">7 derniers jours : ${jours.map(d => d.slice(8, 10) + '/' + d.slice(5, 7) + ' ' + jour[d]).join(' · ')}</div>` : '')
+      + `<div class="muted" style="font-size:11.5px;">Un appel lit jusqu'à ${j.paj_pa_apel * 100} lignes. Au-delà des limites, les postes gardent leurs données et reprennent le lendemain.</div>`;
+  } catch (e) { el.textContent = 'Consommation indisponible : ' + e.message; }
+}
 // Session ouverte : profil + liste des utilisateurs viennent du serveur ; « serveur » remplace le jeton local.
 function ouvrirSession(j) {
   if (j.sesyon) setSesyon(j.sesyon);
@@ -1180,6 +1204,7 @@ function renderSettings() {
   renderUsers(); resetUserForm(); refreshCacheNote(); renderSchemaReport(); renderCaisses(); renderPresenceSettings();
   const dv = document.getElementById('deviceIdText'); if (dv) dv.textContent = deviceId();
   const pp = document.getElementById('postePartage'); if (pp) pp.checked = postePartage();
+  renderConso();
 }
 function saveToken() {
   const t = document.getElementById('tokenInput').value.trim();
@@ -2264,7 +2289,7 @@ function setConnState(ok, msg, auth) {
   if (typeof renderLoginConn === 'function') renderLoginConn();
 }
 function getConnState() { try { return JSON.parse(localStorage.getItem('bwat_conn') || 'null'); } catch { return null; } }
-function isAuthError(msg) { return /\(401\)|\(403\)|INVALID_AUTH|AUTHENTICATION_REQUIRED|NOT_AUTHORIZED|INVALID_PERMISSIONS/i.test(String(msg || '')); }
+function isAuthError(msg) { if (/QUOTA_JOURNALIER/.test(String(msg || ''))) return false; return /\(401\)|\(403\)|INVALID_AUTH|AUTHENTICATION_REQUIRED|NOT_AUTHORIZED|INVALID_PERMISSIONS/i.test(String(msg || '')); }
 function isoMinusMargin(iso) { return new Date(new Date(iso).getTime() - DELTA_MARGE_MS).toISOString(); }
 
 // ---------- Téléchargement complet d'un mois ----------
@@ -2663,7 +2688,7 @@ async function startSync(forceFull) {
     if (typeof perfEnvoyer === 'function' && !CACHE_SEUL && perfActif() && !failed.length && !SYNC_ISSUES.length) {
       try { await perfEnvoyer({}); } catch (e) { logLine('⚠️ Performance agent : ' + e.message); }
     }
-    setConnState(!failed.length, failed.length ? `${failed.length} base(s) en erreur : ${failed.join(', ')}` : '', failed.length === moisDuService().length);
+    setConnState(!failed.length, failed.length ? `${failed.length} base(s) en erreur : ${failed.join(', ')}` : '', failed.length === moisDuService().length && !_quotaAverti);
     SYNC_FAILED = CACHE_SEUL ? [] : failed.slice();
     if (!CACHE_SEUL && !HORS_LIGNE && !failed.length && !SYNC_ISSUES.length) { try { localStorage.setItem('bwat_derniere_synchro_' + SERVICE, String(Date.now())); } catch {} }
     if (typeof renderSyncBanner === 'function') renderSyncBanner(failed);
