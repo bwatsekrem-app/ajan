@@ -111,7 +111,10 @@ td.okc::before{content:"✓ ";font-weight:700}
 .err{background:var(--erb);color:var(--er);padding:10px 12px;border-radius:10px;margin-top:10px;white-space:pre-wrap;border:1px solid color-mix(in srgb,var(--er) 25%,transparent)}
 .note{font-size:12.5px;color:var(--mut);margin-top:8px;line-height:1.55}
 .kat>h2+.note{margin-top:-4px}
-.kol3{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.kol3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:14px}
+.kol3>*{min-width:0}
+.wrap.lis2{max-height:50vh}
+th.tl,td.tl{text-align:left}
 .vid{text-align:center;padding:48px 20px;color:var(--mut)}
 .vid svg{width:44px;height:44px;opacity:.5;margin-bottom:10px}
 /* Fenèt */
@@ -767,7 +770,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
         o.nivo = l.doub && l.doub[r] ? l.doub[r].nivo || "seten" : null;
         (o.nivo ? D : I).push(o);
       }
-      const t = (lst) => lst.length ? `<table><tr><th>Kont</th><th>Rubrik</th><th>Montan</th><th>Solde</th><th>Kliyan</th></tr>${lst.map((o) => `<tr><td>${esc(o.kont)}${o.nivo ? ` <span class="chip ${o.nivo === "seten" ? "er" : "av"}">${o.nivo === "seten" ? "doub" : "posib"}</span>` : ""}</td><td>${esc(RUB_L[o.rub] || o.rub)}</td><td>${nf(o.m)}</td><td>${o.x ? nf(o.x.solde) : nf(o.l.solde)}</td><td>${o.x ? esc(o.x.kliyan) + (o.x.st === "pending" ? ' <span class="chip av">an atant</span>' : "") : esc(o.l.non || "") + (o.l.erronees ? ' <span class="chip er">Erronees</span>' : "")}</td></tr>`).join("")}</table>` : `<div class="note okc">Okenn</div>`;
+      const t = (lst) => lst.length ? `<div class="wrap lis2"><table><tr><th>Kont</th><th>Rubrik</th><th>Montan</th><th>Solde</th><th class="tl">Kliyan</th></tr>${lst.map((o) => `<tr><td>${esc(o.kont)}${o.nivo ? ` <span class="chip ${o.nivo === "seten" ? "er" : "av"}">${o.nivo === "seten" ? "doub" : "posib"}</span>` : ""}</td><td>${esc(RUB_L[o.rub] || o.rub)}</td><td>${nf(o.m)}</td><td>${o.x ? nf(o.x.solde) : nf(o.l.solde)}</td><td class="tl">${o.x ? esc(o.x.kliyan) + (o.x.st === "pending" ? ' <span class="chip av">an atant</span>' : "") : esc(o.l.non || "") + (o.l.erronees ? ' <span class="chip er">Erronees</span>' : "")}</td></tr>`).join("")}</table></div>` : `<div class="note okc">Okenn</div>`;
       const sòmM = (l) => nf(l.reduce((x, o) => x + o.m, 0));
       box.innerHTML = `<h2 style="margin-top:14px">Liy yo · ${fd(j)}</h2>
         <div class="kat" style="border-color:var(--er)"><h2 style="color:var(--er)">Doub : nan Importation Globale MEN deja sou app la (${D.length} · ${sòmM(D)} G)</h2>
