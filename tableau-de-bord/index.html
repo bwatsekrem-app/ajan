@@ -917,7 +917,7 @@ async function tablo(aksyon, data) {
 window.fetch = async function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   if (!url.startsWith('https://api.airtable.com/')) return _fetchNatif(input, init);
-  if (HORS_LIGNE) throw new TypeError('Mode hors ligne');
+  if (HORS_LIGNE || CACHE_SEUL) throw new TypeError('Mode hors ligne');
   init = init || {};
   const r = await _fetchNatif(TABLO_API, { method: 'POST', signal: init.signal,
     headers: { 'Content-Type': 'application/json', 'x-tablo-sesyon': SESYON || '' },
@@ -954,6 +954,31 @@ function anciensComptes() { try { return JSON.parse(localStorage.getItem('bwat_a
 // Pendant HL_DUREE, la même personne peut rouvrir le fichier SANS Internet : elle voit le dernier état synchronisé,
 // sans synchronisation ; les pointages attendent le retour d'Internet. Au-delà, il faut se reconnecter avec Internet.
 let HORS_LIGNE = false;
+// ============ DÉMARRAGE RAPIDE ============
+// À l'ouverture (ou quand Chrome recharge l'onglet), on affiche d'abord les données déjà gardées sur ce poste
+// (quelques secondes, sans réseau), puis on met à jour en arrière-plan. Si la dernière synchronisation réussie
+// date de moins de SYNC_FRAICHE, on ne relance même pas : les données sont à jour.
+let CACHE_SEUL = false;
+const SYNC_FRAICHE = 5 * 60 * 1000;
+function derniereSynchro() { try { return +(localStorage.getItem('bwat_derniere_synchro_' + SERVICE) || 0); } catch { return 0; } }
+async function demarrageRapide() {
+  if (SYNC_RUNNING) return;
+  let aCache = false;
+  try { aCache = !!(await cacheGet(cacheKey('registre'))); } catch {}
+  if (aCache && !DATA_READY) {
+    CACHE_SEUL = true;
+    try { await startSync(false); } catch {} finally { CACHE_SEUL = false; }
+  }
+  if (HORS_LIGNE) { if (!DATA_READY) await startSync(false); return; }
+  const age = Date.now() - derniereSynchro();
+  if (DATA_READY && age < SYNC_FRAICHE) {
+    setSyncStatus(`${MASTER_INDEX.length} comptes · à jour (synchronisé il y a ${Math.max(1, Math.round(age / 60000))} min)`);
+    const gp = document.getElementById('globalProgress'); if (gp) gp.style.display = 'none';
+    return;
+  }
+  if (DATA_READY) setSyncStatus(`${MASTER_INDEX.length} comptes · données du poste affichées — mise à jour en cours…`);
+  startSync(false);
+}
 const HL_DUREE = 24 * 3600 * 1000, HL_TOURS = 210000;
 function hlTout() { try { return JSON.parse(localStorage.getItem('bwat_hors_ligne') || '{}'); } catch { return {}; } }
 function hlEcrire(t) { try { localStorage.setItem('bwat_hors_ligne', JSON.stringify(t)); } catch {} }
@@ -1117,7 +1142,7 @@ function enterApp() {
   renderOfflineBanner();
   presOnOpen(); presStart();
   if (!DATA_READY && !SYNC_RUNNING) {
-    if (CONFIG.token) startSync(false);
+    if (CONFIG.token) demarrageRapide();
     else setSyncStatus(CURRENT_USER.admin ? 'Jeton Airtable non configuré — saisis-le dans Paramètres.' : 'Jeton Airtable non configuré — demande à un administrateur.');
   }
   if (CURRENT_USER.admin && CURRENT_USER.defaultPwd) {
@@ -1510,7 +1535,7 @@ async function switchService(cle) {
   renderServiceBar(); buildNav();
   const first = PAGES.find(p => userCanSee(CURRENT_USER, p.id) && pageDuService(p.id));
   showPage(first ? first.id : 'parametres');
-  if (CONFIG.token) startSync(false);
+  if (CONFIG.token) demarrageRapide();
 }
 // Pages qui n'ont pas de sens pour le service courant (Grandon n'a ni frais ni fonds de garantie)
 function pageDuService(id) {
@@ -1771,6 +1796,7 @@ let REG_COLLECTEURS = {};       // compte -> collecteur par défaut (registre), 
 let REG_INFOS = {};             // compte -> { nom, statut, bloqueLabel, raison, cree } tel que lu au registre
 
 function logLine(msg) {
+  if (typeof CACHE_SEUL !== 'undefined' && CACHE_SEUL) return; // lecture rapide du cache : pas de journal d'erreurs « réseau » attendues
   const el = document.getElementById('syncLog');
   if (!el) return;
   const line = document.createElement('div');
@@ -1801,7 +1827,7 @@ async function airtableGet(baseId, url) {
     } catch (netErr) {
       // « Failed to fetch » : coupure Wi-Fi, connexion fermée par Airtable, onglet mis en veille.
       // C'est presque toujours passager : on attend et on recommence au lieu de perdre le mois.
-      if (attempt < 5 && !HORS_LIGNE) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
+      if (attempt < 5 && !HORS_LIGNE && !CACHE_SEUL) { await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); continue; }
       const e = new Error(`Connexion interrompue (${String(netErr.message || netErr).slice(0, 60)}) sur ${baseId}`);
       e.reseau = true; throw e;
     }
@@ -2233,7 +2259,7 @@ function servicePortee(schema) {
 }
 // État de la dernière connexion Airtable, lisible depuis l'écran de connexion (avant même d'être identifié)
 function setConnState(ok, msg, auth) {
-  if (HORS_LIGNE) return; // hors ligne : l'échec attendu ne doit pas être affiché comme une panne
+  if (HORS_LIGNE || CACHE_SEUL) return; // hors ligne / lecture du cache : l'échec attendu ne doit pas être affiché comme une panne
   try { localStorage.setItem('bwat_conn', JSON.stringify({ ok: !!ok, msg: msg || '', auth: !!auth, t: Date.now() })); } catch {}
   if (typeof renderLoginConn === 'function') renderLoginConn();
 }
@@ -2463,6 +2489,7 @@ async function startSync(forceFull) {
   let stepsDone = 0;
   const liveCounts = {};
   function updateBar(label) {
+    if (CACHE_SEUL) label = 'Affichage des données gardées sur ce poste…';
     document.getElementById('progressLabel').textContent = label;
     const pct = Math.round((stepsDone / totalSteps) * 100);
     document.getElementById('progressPct').textContent = pct + '%';
@@ -2624,7 +2651,7 @@ async function startSync(forceFull) {
     computeAll(byAccount, collecteurDefautMap, bloqueMap, regInfo);
     verifierIsolationService();
     stepsDone = totalSteps;
-    try { await snapshotSync(collecteurDefautMap, failed.concat(SYNC_ISSUES.map(i => i.label))); } catch (e) { logLine('⚠️ Suivi des irrégularités : ' + e.message); SNAP.error = e.message; }
+    if (!CACHE_SEUL) try { await snapshotSync(collecteurDefautMap, failed.concat(SYNC_ISSUES.map(i => i.label))); } catch (e) { logLine('⚠️ Suivi des irrégularités : ' + e.message); SNAP.error = e.message; }
     const secs = Math.round((Date.now() - t0) / 1000);
     updateBar(`Synchronisation terminée ✓ (${secs} s)`);
     logLine(`✓ ${MASTER_INDEX.length} comptes · ${ALERTS_LIST.length} alertes · ${secs} s`);
@@ -2632,14 +2659,16 @@ async function startSync(forceFull) {
     // remontée des irrégularités vers la base de suivi des agents (jamais si des bases sont incomplètes :
     // on n'inscrit pas une irrégularité qui pourrait venir de données partielles)
     // rapports de contrôle archivés : lecture seule, en fin de parcours, sans jamais bloquer la synchro
-    if (typeof archCharger === 'function') { try { await archCharger(forceFull); } catch (e) { logLine('⚠️ Rapports archivés : ' + e.message); } }
-    if (typeof perfEnvoyer === 'function' && perfActif() && !failed.length && !SYNC_ISSUES.length) {
+    if (typeof archCharger === 'function' && !CACHE_SEUL) { try { await archCharger(forceFull); } catch (e) { logLine('⚠️ Rapports archivés : ' + e.message); } }
+    if (typeof perfEnvoyer === 'function' && !CACHE_SEUL && perfActif() && !failed.length && !SYNC_ISSUES.length) {
       try { await perfEnvoyer({}); } catch (e) { logLine('⚠️ Performance agent : ' + e.message); }
     }
     setConnState(!failed.length, failed.length ? `${failed.length} base(s) en erreur : ${failed.join(', ')}` : '', failed.length === moisDuService().length);
-    SYNC_FAILED = failed.slice();
+    SYNC_FAILED = CACHE_SEUL ? [] : failed.slice();
+    if (!CACHE_SEUL && !HORS_LIGNE && !failed.length && !SYNC_ISSUES.length) { try { localStorage.setItem('bwat_derniere_synchro_' + SERVICE, String(Date.now())); } catch {} }
     if (typeof renderSyncBanner === 'function') renderSyncBanner(failed);
-    if (typeof logEvent === 'function') logEvent('synchro', `Synchronisation ${forceFull ? 'complète' : 'différentielle'} terminée en ${secs} s — ${totalTx} transactions${failed.length ? ', ' + failed.length + ' base(s) en erreur' : ''}`);
+    if (typeof logEvent === 'function' && !CACHE_SEUL) logEvent('synchro', `Synchronisation ${forceFull ? 'complète' : 'différentielle'} terminée en ${secs} s — ${totalTx} transactions${failed.length ? ', ' + failed.length + ' base(s) en erreur' : ''}`);
+    if (CACHE_SEUL) setSyncStatus(`${MASTER_INDEX.length} comptes · données gardées sur ce poste`); else
     setSyncStatus(`${MASTER_INDEX.length} comptes · ${totalTx} transactions · synchronisé à ${new Date().toLocaleTimeString('fr-FR')} (${secs} s)${failed.length ? ` — ⚠️ ${failed.length} base(s) en erreur, voir Paramètres` : ''}`);
     document.querySelectorAll('.syncBtn').forEach(b => b.disabled = false);
     if (fsb) fsb.disabled = false;
@@ -3189,6 +3218,7 @@ function renderSyncBanner(failed) {
   if (!el) return;
   failed = failed || [];
   if (HORS_LIGNE) { el.style.display = 'none'; el.innerHTML = ''; return; } // hors ligne : le bandeau jaune suffit
+  if (CACHE_SEUL) return; // affichage rapide depuis le cache : le bandeau sera calculé par la vraie synchronisation
   if (!failed.length && !SYNC_ISSUES.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   const parts = [];
   if (SYNC_ISSUES.length) parts.push(`<b>⛔ Lecture incomplète sur ${SYNC_ISSUES.length} base(s) : ${esc(SYNC_ISSUES.map(i => i.label).join(', '))}</b>Les données précédentes de ces mois ont été conservées (aucune ligne perdue), mais elles peuvent ne pas contenir les toutes dernières transactions. Relance une resynchronisation complète ; si le message revient, préviens l'administrateur avant d'utiliser les totaux.`);
