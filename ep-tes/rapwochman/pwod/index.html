@@ -101,6 +101,7 @@ th.imp{color:var(--ok)}
 tr.tot td{font-weight:700;border-top:2px solid var(--li);background:var(--th)!important}
 tr.klik{cursor:pointer}tr.klik:hover td{background:var(--pri-t)!important}
 td.ekar{color:var(--er);font-weight:700}
+td.avc{color:var(--av, #b45309);font-weight:700;white-space:nowrap}
 td.ekar::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--er);margin-right:7px;vertical-align:middle}
 td.okc{color:var(--ok);font-weight:600}
 td.okc::before{content:"✓ ";font-weight:700}
@@ -250,7 +251,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   let envK = "prod"; // vèsyon pwodiksyon : baz pwodiksyon sèlman
   $("env").value = envK;
   let sb = null, sess = null;
-  const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null, sekEkar: false };
+  const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null, sekEkar: false, alias: {} };
 
   function kreyeKlyan() {
     sb = supabase.createClient(ENV[envK].url, ENV[envK].key, { auth: { storageKey: "rapw-" + envK } });
@@ -261,14 +262,14 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   const KLE_SOVE = () => "rapw_eta_" + envK;
   function sove() {
     try { sessionStorage.setItem(KLE_SOVE(), JSON.stringify({ deb: $("deb").value, fen: $("fen").value, gwoupe: $("gwoupe").checked,
-      done: st.done, imp: st.imp, err: st.err, tab: st.tab, rubAjan: st.rubAjan, sekEkar: st.sekEkar, lè: Date.now() })); } catch (_) {}
+      done: st.done, imp: st.imp, err: st.err, tab: st.tab, rubAjan: st.rubAjan, sekEkar: st.sekEkar, alias: st.alias, lè: Date.now() })); } catch (_) {}
   }
   function restore() {
     try {
       const x = JSON.parse(sessionStorage.getItem(KLE_SOVE()) || "null");
       if (!x || Date.now() - x.lè > 12 * 3600e3) return false;
       $("deb").value = x.deb; $("fen").value = x.fen; $("gwoupe").checked = x.gwoupe !== false;
-      st.done = x.done; st.imp = x.imp || {}; st.err = x.err || []; st.tab = x.tab || "jeneral"; st.rubAjan = x.rubAjan || "depot"; st.sekEkar = !!x.sekEkar;
+      st.done = x.done; st.imp = x.imp || {}; st.err = x.err || []; st.tab = x.tab || "jeneral"; st.rubAjan = x.rubAjan || "depot"; st.sekEkar = !!x.sekEkar; st.alias = x.alias || {};
       $("eta").textContent = st.done ? `Chaje : ${fd(x.deb)} → ${fd(x.fen)} (sonje depi ${new Date(x.lè).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · klike « Chaje » pou mete l ajou)` : "";
       return true;
     } catch (_) { return false; }
@@ -346,6 +347,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       const { data, error } = await sb.rpc("rapw_sentez", { p_deb: deb, p_fen: fen });
       if (error) throw new Error(error.message);
       st.done = data; st.imp = {};
+      { const al = await sb.rpc("rapw_alias"); st.alias = al.error ? {} : al.data || {}; }
       let fèt = 0;
       for (const j of jous) {
         $("eta").textContent = `Airtable ${fd(j)} (${fèt + 1}/${jous.length})…`;
@@ -362,7 +364,9 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   };
 
   // ---------- Kalkil ----------
-  function kleKolekte(nomAt) { return $("gwoupe").checked ? prefiks(nomAt) : String(nomAt).trim(); }
+  // Non Airtable diferan pou menm moun (ex. « Barbara Rock » / « Barbara ») → rapw_alias
+  const aliasDe = (n) => { const t = String(n ?? "").trim(); return st.alias?.[t] || t; };
+  function kleKolekte(nomAt) { const n = aliasDe(nomAt); return $("gwoupe").checked ? prefiks(n) : n; }
   // Itilizatè Supabase → kle kolektè (non Airtable)
   function mapAjan(kles) {
     const m = {}, D = st.done;
@@ -443,10 +447,17 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       <th>Importation Globale</th><th class="imp" title="Supabase valide + Supabase an atant + Importation Globale">Data Importe</th>
       <th>Declaration Agent</th><th title="Data Importe − Declaration Agent">Ekar</th></tr>`;
   }
-  function liy(lab, c, r, atr = "") {
+  // ekAj : { n, abs } = ajan ki gen ekar nan rubrik la (yo ka anile youn lòt nan total la)
+  function liy(lab, c, r, atr = "", ekAj = null) {
     const sbOk = RUB_SB.has(r);
+    let ek = ekarCel(imp(c), c.d);
+    if (ekAj && ekAj.n) {
+      const t = `${ekAj.n} ajan gen ekar nan rubrik sa a (${nf(ekAj.abs)} G an tout, valè absoli). Total la ka 0 paske ekar yo anile youn lòt. Klike pou wè yo.`;
+      const chip = ` <span class="chip av" title="${t}">⚠ ${ekAj.n} ajan</span>`;
+      ek = Math.round(imp(c) - c.d) === 0 ? `<td class="avc" title="${t}">0${chip}</td>` : ek.replace("</td>", chip + "</td>");
+    }
     return `<tr ${atr}><td>${lab}</td><td>${sbOk ? nf(c.s) : '<span class="na">—</span>'}</td><td>${sbOk ? nf(c.sa) : '<span class="na">—</span>'}</td>
-      <td>${nf(c.i)}</td><td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ekarCel(imp(c), c.d)}</tr>`;
+      <td>${nf(c.i)}</td><td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ek}</tr>`;
   }
   // Pou chak kolektè : kantite (jou × rubrik) kote li parèt nan Supabase AK nan Importation (posib doub)
   function doubAjan(K, k, r) {
@@ -459,26 +470,29 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       const all = [];
       for (const j of Object.keys(K.A)) for (const rr of Object.values(K.A[j])) if (rr[r]) all.push(rr[r]);
       const t = sòm(all);
-      return { r, l, t, vid: !t.s && !t.sa && !t.i && !t.d };
+      const ek = Object.values(totAjan(K, r)).map((c) => Math.round(imp(c) - c.d)).filter((d) => d !== 0);
+      return { r, l, t, vid: !t.s && !t.sa && !t.i && !t.d, ekAj: { n: ek.length, abs: ek.reduce((a, d) => a + Math.abs(d), 0) } };
     }).filter((x) => !x.vid);
-    // KPI anwo paj la
-    const nOk = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0).length;
+    // KPI anwo paj la : yon rubrik balanse sèlman si total la 0 E okenn ajan pa gen ekar ladan l
+    const nOk = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0 && !x.ekAj.n).length;
+    const nKache = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0 && x.ekAj.n).length;
     const ajEk = new Set(), ajSan = new Set(); let nDoub = 0, nPos = 0;
     for (const [r] of RUB) { const T = totAjan(K, r); for (const [k, c] of Object.entries(T)) if (Math.round(imp(c) - c.d) !== 0) ajEk.add(k); }
     for (const j of Object.keys(K.A)) for (const [k, rr] of Object.entries(K.A[j])) for (const c of Object.values(rr)) { nDoub += c.xs || 0; nPos += (c.x || 0) - (c.xs || 0); }
     for (const [j, m] of Object.entries(K.meta)) for (const [k, x] of Object.entries(m)) if (x && !x.rapo) ajSan.add(k);
     const vers = rows.find((x) => x.r === "versement");
     let h = `<div class="kpi">
-      <div class="k ${nOk === rows.length ? "ok" : "er"}"><div class="l">Rubrik balanse</div><div class="v">${nOk} / ${rows.length}</div><div class="s">${rows.length - nOk ? `${rows.length - nOk} rubrik gen ekar` : "Tout bagay balanse"}</div></div>
+      <div class="k ${nOk === rows.length ? "ok" : "er"}"><div class="l">Rubrik balanse</div><div class="v">${nOk} / ${rows.length}</div><div class="s">${rows.length - nOk ? `${rows.length - nOk} rubrik gen ekar${nKache ? ` (${nKache} ak total 0, men ajan gen ekar)` : ""}` : "Tout bagay balanse"}</div></div>
       <div class="k ${ajEk.size ? "er" : "ok"}"><div class="l">Ajan ki gen ekar</div><div class="v">${ajEk.size}</div><div class="s">${ajEk.size ? "Klike « Pa ajan » pou detay" : "Okenn ekar"}</div></div>
       <div class="k ${nDoub ? "er" : nPos ? "av" : "ok"}"><div class="l">Montan an doub</div><div class="v">${nf(nDoub)}</div><div class="s">${nPos ? `+ ${nf(nPos)} posib doub` : "Okenn posib doub"}</div></div>
       ${vers ? `<div class="k ak"><div class="l">Versement · Data Importe</div><div class="v">${nf(imp(vers.t))}</div><div class="s">Declaration : ${nf(vers.t.d)}</div></div>` : `<div class="k ${ajSan.size ? "av" : "ok"}"><div class="l">Ajan san rapò</div><div class="v">${ajSan.size}</div><div class="s">Pa nan Declaration Agent</div></div>`}
     </div>`;
     h += `<div class="kat"><h2>Total jeneral · tout ajan</h2><div class="wrap"><table>${antet("Rubrik")}`;
-    for (const x of rows) h += liy(esc(x.l), x.t, x.r, `class="klik" data-rub="${x.r}"`);
+    for (const x of rows) h += liy(esc(x.l), x.t, x.r, `class="klik" data-rub="${x.r}"`, x.ekAj);
     h += `</table></div><div class="note"><b>Data Importe</b> = Supabase valide + Supabase an atant + Importation Globale. <b>Ekar</b> = Data Importe − Declaration Agent.
       Siy <span class="chip er">doub</span> la parèt lè yon liy nan Importation Globale deja sou app la (menm kont, menm rubrik, menm montan, menm jou).
-      Kopi istorik Airtable ki te enpòte sou Supabase yo pa konte bò Supabase (yo deja nan Importation Globale). Klike sou yon rubrik pou wè l pa ajan.</div></div>`;
+      Kopi istorik Airtable ki te enpòte sou Supabase yo pa konte bò Supabase (yo deja nan Importation Globale). Klike sou yon rubrik pou wè l pa ajan.
+      Siy <span class="chip av">⚠ n ajan</span> la vle di gen ajan ki gen ekar nan rubrik la, menm si total la ka bay 0 (ekar yo anile youn lòt).</div></div>`;
     $("vi").innerHTML = h;
     $("vi").querySelectorAll("[data-rub]").forEach((tr) => (tr.onclick = () => { st.rubAjan = tr.dataset.rub; st.tab = "ajan"; rann(); }));
   }
@@ -525,7 +539,10 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       h += liy(esc(k) + chipsAjan(K, k, r, c), c, r, `class="klik" data-k="${esc(k)}"`);
     }
     if (!ks.length) h += `<tr><td colspan="7" class="okc" style="text-align:center;padding:18px">✓ Okenn ajan pa gen ekar nan rubrik sa a</td></tr>`;
-    else h += liy(st.sekEkar ? "TOTAL (ajan ki gen ekar)" : "TOTAL", tot, r, 'class="tot"');
+    else {
+      const ekL = tout.map((k) => Math.round(imp(T[k]) - T[k].d)).filter((d) => d !== 0);
+      h += liy(st.sekEkar ? "TOTAL (ajan ki gen ekar)" : "TOTAL", tot, r, 'class="tot"', { n: ekL.length, abs: ekL.reduce((x, d) => x + Math.abs(d), 0) });
+    }
     h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
     $("vi").innerHTML = h;
     $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); sove(); };
@@ -557,7 +574,31 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
     let h = `<div class="kat"><h2>Ajan Supabase → non kolektè Airtable</h2><div class="wrap"><table><tr><th>Itilizatè Supabase</th><th>Kolektè Airtable (rekonèt)</th><th>Chwazi alamen</th></tr>`;
     for (const a of ajan) h += `<tr><td>${esc(a.non)}</td><td>${esc(K.um[a.u] || "")}</td><td><select data-u="${a.u}" data-old="${esc(man[a.u] || "")}">${opt(man[a.u] || "")}</select></td></tr>`;
     h += `</table></div><div class="note">Sistèm nan rekonèt ajan an otomatikman lè non Airtable la (san A1-/Succu-) parèt nan non Supabase la. Si li pa bon, chwazi non an alamen.</div></div>`;
+    // Menm moun, non diferan nan Airtable
+    const nonAt = new Set([...kles].map((k) => String(k).trim()));
+    for (const n of Object.keys(st.alias || {})) nonAt.add(n);
+    const lis = [...nonAt].sort((a, b) => a.localeCompare(b));
+    const mo = (n) => norm(prefiks(n)).split(" ").filter(Boolean);
+    const sij = (n) => { // sijesyon : yon lòt non ki kòmanse menm jan (ex. « Barbara » pou « Barbara Rock »)
+      const w = mo(n); if (w.length < 2) return null;
+      const c = lis.filter((x) => x !== n && !st.alias?.[x]).filter((x) => { const v = mo(x); return v.length && v.length < w.length && v.every((t, i) => t === w[i]); });
+      return c.length === 1 ? c[0] : null;
+    };
+    h += `<div class="kat"><h2>Menm moun, non diferan nan Airtable</h2><div class="wrap"><table><tr><th>Non nan Airtable</th><th>Se menm moun ak…</th><th></th></tr>`;
+    for (const n of lis) {
+      const cur = st.alias?.[n] || "", s = !cur && sij(n);
+      const o = `<option value="">(li menm)</option>` + lis.filter((x) => x !== n).map((x) => `<option ${x === cur ? "selected" : ""}>${esc(x)}</option>`).join("");
+      h += `<tr><td>${esc(n)}</td><td><select data-al="${esc(n)}">${o}</select></td><td>${s ? `<button class="pri" data-sij="${esc(n)}" data-v="${esc(s)}">Konbine ak « ${esc(s)} »</button>` : cur ? '<span class="chip ok">konbine</span>' : ""}</td></tr>`;
+    }
+    h += `</table></div><div class="note">Lè yon ajan parèt ak 2 non (pa egzanp « Barbara Rock » nan Importation ak « Barbara » nan Declaration), chwazi non pou konte l la. Chif yo ap mete ansanm sou yon sèl liy.</div></div>`;
     $("vi").innerHTML = h;
+    const meteAl = async (n, v) => {
+      const { data, error } = await sb.rpc("rapw_alias_mete", { p_non: n, p_vre: v || null });
+      if (error) return mesaj("Erè", esc(error.message), "er");
+      st.alias = data || {}; sove(); rann();
+    };
+    $("vi").querySelectorAll("select[data-al]").forEach((x) => (x.onchange = () => meteAl(x.dataset.al, x.value)));
+    $("vi").querySelectorAll("[data-sij]").forEach((b) => (b.onclick = () => meteAl(b.dataset.sij, b.dataset.v)));
     $("vi").querySelectorAll("select[data-u]").forEach((s) => (s.onchange = async () => {
       const { error } = await sb.rpc("rapw_ajan_konekte", { p_user: s.dataset.u, p_nom: s.value || null });
       if (error) return mesaj("Erè", esc(error.message), "er");
