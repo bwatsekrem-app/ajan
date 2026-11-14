@@ -101,6 +101,7 @@ th.imp{color:var(--ok)}
 tr.tot td{font-weight:700;border-top:2px solid var(--li);background:var(--th)!important}
 tr.klik{cursor:pointer}tr.klik:hover td{background:var(--pri-t)!important}
 td.ekar{color:var(--er);font-weight:700}
+td.avc{color:var(--av, #b45309);font-weight:700;white-space:nowrap}
 td.ekar::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--er);margin-right:7px;vertical-align:middle}
 td.okc{color:var(--ok);font-weight:600}
 td.okc::before{content:"✓ ";font-weight:700}
@@ -446,10 +447,17 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       <th>Importation Globale</th><th class="imp" title="Supabase valide + Supabase an atant + Importation Globale">Data Importe</th>
       <th>Declaration Agent</th><th title="Data Importe − Declaration Agent">Ekar</th></tr>`;
   }
-  function liy(lab, c, r, atr = "") {
+  // ekAj : { n, abs } = ajan ki gen ekar nan rubrik la (yo ka anile youn lòt nan total la)
+  function liy(lab, c, r, atr = "", ekAj = null) {
     const sbOk = RUB_SB.has(r);
+    let ek = ekarCel(imp(c), c.d);
+    if (ekAj && ekAj.n) {
+      const t = `${ekAj.n} ajan gen ekar nan rubrik sa a (${nf(ekAj.abs)} G an tout, valè absoli). Total la ka 0 paske ekar yo anile youn lòt. Klike pou wè yo.`;
+      const chip = ` <span class="chip av" title="${t}">⚠ ${ekAj.n} ajan</span>`;
+      ek = Math.round(imp(c) - c.d) === 0 ? `<td class="avc" title="${t}">0${chip}</td>` : ek.replace("</td>", chip + "</td>");
+    }
     return `<tr ${atr}><td>${lab}</td><td>${sbOk ? nf(c.s) : '<span class="na">—</span>'}</td><td>${sbOk ? nf(c.sa) : '<span class="na">—</span>'}</td>
-      <td>${nf(c.i)}</td><td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ekarCel(imp(c), c.d)}</tr>`;
+      <td>${nf(c.i)}</td><td class="imp">${nf(imp(c))}</td><td>${nf(c.d)}</td>${ek}</tr>`;
   }
   // Pou chak kolektè : kantite (jou × rubrik) kote li parèt nan Supabase AK nan Importation (posib doub)
   function doubAjan(K, k, r) {
@@ -462,26 +470,29 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       const all = [];
       for (const j of Object.keys(K.A)) for (const rr of Object.values(K.A[j])) if (rr[r]) all.push(rr[r]);
       const t = sòm(all);
-      return { r, l, t, vid: !t.s && !t.sa && !t.i && !t.d };
+      const ek = Object.values(totAjan(K, r)).map((c) => Math.round(imp(c) - c.d)).filter((d) => d !== 0);
+      return { r, l, t, vid: !t.s && !t.sa && !t.i && !t.d, ekAj: { n: ek.length, abs: ek.reduce((a, d) => a + Math.abs(d), 0) } };
     }).filter((x) => !x.vid);
-    // KPI anwo paj la
-    const nOk = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0).length;
+    // KPI anwo paj la : yon rubrik balanse sèlman si total la 0 E okenn ajan pa gen ekar ladan l
+    const nOk = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0 && !x.ekAj.n).length;
+    const nKache = rows.filter((x) => Math.round(imp(x.t) - x.t.d) === 0 && x.ekAj.n).length;
     const ajEk = new Set(), ajSan = new Set(); let nDoub = 0, nPos = 0;
     for (const [r] of RUB) { const T = totAjan(K, r); for (const [k, c] of Object.entries(T)) if (Math.round(imp(c) - c.d) !== 0) ajEk.add(k); }
     for (const j of Object.keys(K.A)) for (const [k, rr] of Object.entries(K.A[j])) for (const c of Object.values(rr)) { nDoub += c.xs || 0; nPos += (c.x || 0) - (c.xs || 0); }
     for (const [j, m] of Object.entries(K.meta)) for (const [k, x] of Object.entries(m)) if (x && !x.rapo) ajSan.add(k);
     const vers = rows.find((x) => x.r === "versement");
     let h = `<div class="kpi">
-      <div class="k ${nOk === rows.length ? "ok" : "er"}"><div class="l">Rubrik balanse</div><div class="v">${nOk} / ${rows.length}</div><div class="s">${rows.length - nOk ? `${rows.length - nOk} rubrik gen ekar` : "Tout bagay balanse"}</div></div>
+      <div class="k ${nOk === rows.length ? "ok" : "er"}"><div class="l">Rubrik balanse</div><div class="v">${nOk} / ${rows.length}</div><div class="s">${rows.length - nOk ? `${rows.length - nOk} rubrik gen ekar${nKache ? ` (${nKache} ak total 0, men ajan gen ekar)` : ""}` : "Tout bagay balanse"}</div></div>
       <div class="k ${ajEk.size ? "er" : "ok"}"><div class="l">Ajan ki gen ekar</div><div class="v">${ajEk.size}</div><div class="s">${ajEk.size ? "Klike « Pa ajan » pou detay" : "Okenn ekar"}</div></div>
       <div class="k ${nDoub ? "er" : nPos ? "av" : "ok"}"><div class="l">Montan an doub</div><div class="v">${nf(nDoub)}</div><div class="s">${nPos ? `+ ${nf(nPos)} posib doub` : "Okenn posib doub"}</div></div>
       ${vers ? `<div class="k ak"><div class="l">Versement · Data Importe</div><div class="v">${nf(imp(vers.t))}</div><div class="s">Declaration : ${nf(vers.t.d)}</div></div>` : `<div class="k ${ajSan.size ? "av" : "ok"}"><div class="l">Ajan san rapò</div><div class="v">${ajSan.size}</div><div class="s">Pa nan Declaration Agent</div></div>`}
     </div>`;
     h += `<div class="kat"><h2>Total jeneral · tout ajan</h2><div class="wrap"><table>${antet("Rubrik")}`;
-    for (const x of rows) h += liy(esc(x.l), x.t, x.r, `class="klik" data-rub="${x.r}"`);
+    for (const x of rows) h += liy(esc(x.l), x.t, x.r, `class="klik" data-rub="${x.r}"`, x.ekAj);
     h += `</table></div><div class="note"><b>Data Importe</b> = Supabase valide + Supabase an atant + Importation Globale. <b>Ekar</b> = Data Importe − Declaration Agent.
       Siy <span class="chip er">doub</span> la parèt lè yon liy nan Importation Globale deja sou app la (menm kont, menm rubrik, menm montan, menm jou).
-      Kopi istorik Airtable ki te enpòte sou Supabase yo pa konte bò Supabase (yo deja nan Importation Globale). Klike sou yon rubrik pou wè l pa ajan.</div></div>`;
+      Kopi istorik Airtable ki te enpòte sou Supabase yo pa konte bò Supabase (yo deja nan Importation Globale). Klike sou yon rubrik pou wè l pa ajan.
+      Siy <span class="chip av">⚠ n ajan</span> la vle di gen ajan ki gen ekar nan rubrik la, menm si total la ka bay 0 (ekar yo anile youn lòt).</div></div>`;
     $("vi").innerHTML = h;
     $("vi").querySelectorAll("[data-rub]").forEach((tr) => (tr.onclick = () => { st.rubAjan = tr.dataset.rub; st.tab = "ajan"; rann(); }));
   }
@@ -528,7 +539,10 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       h += liy(esc(k) + chipsAjan(K, k, r, c), c, r, `class="klik" data-k="${esc(k)}"`);
     }
     if (!ks.length) h += `<tr><td colspan="7" class="okc" style="text-align:center;padding:18px">✓ Okenn ajan pa gen ekar nan rubrik sa a</td></tr>`;
-    else h += liy(st.sekEkar ? "TOTAL (ajan ki gen ekar)" : "TOTAL", tot, r, 'class="tot"');
+    else {
+      const ekL = tout.map((k) => Math.round(imp(T[k]) - T[k].d)).filter((d) => d !== 0);
+      h += liy(st.sekEkar ? "TOTAL (ajan ki gen ekar)" : "TOTAL", tot, r, 'class="tot"', { n: ekL.length, abs: ekL.reduce((x, d) => x + Math.abs(d), 0) });
+    }
     h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
     $("vi").innerHTML = h;
     $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); sove(); };
