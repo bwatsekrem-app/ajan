@@ -234,7 +234,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   ];
   const RUB_L = Object.fromEntries(RUB);
   // Rubrik Supabase konnen (lòt yo pa sou app la : nou pa konpare yo ak Supabase)
-  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais_auto", "frais", "virement", "monnaie", "remise", "solde"]);
+  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais_auto", "frais", "virement", "monnaie", "remise", "solde", "versement"]);
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -932,7 +932,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       const nonAt = [...(K.meta[j]?.[k]?.non || [k])];
       const [s, a] = await Promise.all([sb.rpc("rapw_detay", { p_jou: j, p_uids: uids }), fnReseye({ aksyon: "detay", jou: j, kolekte: nonAt })]);
       if (s.error) throw new Error(s.error.message);
-      const S = (s.data || []).filter((x) => RUB_SB.has(x.rub) && x.rub !== "solde")
+      const S = (s.data || []).filter((x) => RUB_SB.has(x.rub) && x.rub !== "solde" && x.rub !== "versement")
         .map((x) => ({ kont: (x.kod || x.no_compte || "").trim(), rub: x.rub, m: x.rub === "grandon" && x.tip !== "D" ? -x.montan : x.montan, x }));
       const I = [], D = [];
       for (const l of a.liy) for (const [r, v] of Object.entries(l.v)) {
