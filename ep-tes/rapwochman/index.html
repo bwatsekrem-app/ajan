@@ -250,7 +250,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   let envK = "tes"; // vèsyon tès : baz tès sèlman
   $("env").value = envK;
   let sb = null, sess = null;
-  const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null };
+  const st = { done: null, imp: {}, err: [], tab: "jeneral", rubAjan: "depot", ajanSel: null, sekEkar: false };
 
   function kreyeKlyan() {
     sb = supabase.createClient(ENV[envK].url, ENV[envK].key, { auth: { storageKey: "rapw-" + envK } });
@@ -261,14 +261,14 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   const KLE_SOVE = () => "rapw_eta_" + envK;
   function sove() {
     try { sessionStorage.setItem(KLE_SOVE(), JSON.stringify({ deb: $("deb").value, fen: $("fen").value, gwoupe: $("gwoupe").checked,
-      done: st.done, imp: st.imp, err: st.err, tab: st.tab, rubAjan: st.rubAjan, lè: Date.now() })); } catch (_) {}
+      done: st.done, imp: st.imp, err: st.err, tab: st.tab, rubAjan: st.rubAjan, sekEkar: st.sekEkar, lè: Date.now() })); } catch (_) {}
   }
   function restore() {
     try {
       const x = JSON.parse(sessionStorage.getItem(KLE_SOVE()) || "null");
       if (!x || Date.now() - x.lè > 12 * 3600e3) return false;
       $("deb").value = x.deb; $("fen").value = x.fen; $("gwoupe").checked = x.gwoupe !== false;
-      st.done = x.done; st.imp = x.imp || {}; st.err = x.err || []; st.tab = x.tab || "jeneral"; st.rubAjan = x.rubAjan || "depot";
+      st.done = x.done; st.imp = x.imp || {}; st.err = x.err || []; st.tab = x.tab || "jeneral"; st.rubAjan = x.rubAjan || "depot"; st.sekEkar = !!x.sekEkar;
       $("eta").textContent = st.done ? `Chaje : ${fd(x.deb)} → ${fd(x.fen)} (sonje depi ${new Date(x.lè).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · klike « Chaje » pou mete l ajou)` : "";
       return true;
     } catch (_) { return false; }
@@ -504,19 +504,32 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   }
   function vAjan(K) {
     const r = st.rubAjan, T = totAjan(K, r);
-    const ks = Object.keys(T).filter((k) => T[k].s || T[k].sa || T[k].i || T[k].d).sort((a, b) => a.localeCompare(b));
-    const opt = RUB.map(([x, l]) => `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}</option>`).join("");
+    const genEk = (c) => Math.round(imp(c) - c.d) !== 0;
+    const tout = Object.keys(T).filter((k) => T[k].s || T[k].sa || T[k].i || T[k].d).sort((a, b) => a.localeCompare(b));
+    const nEk = tout.filter((k) => genEk(T[k])).length;
+    const ks = st.sekEkar ? tout.filter((k) => genEk(T[k])) : tout;
+    // Konbyen ajan ki gen ekar nan chak rubrik (pou jwenn yo vit nan lis la)
+    const opt = RUB.map(([x, l]) => {
+      const Tx = x === r ? T : totAjan(K, x);
+      const n = Object.values(Tx).filter((c) => (c.s || c.sa || c.i || c.d) && genEk(c)).length;
+      return `<option value="${x}" ${x === r ? "selected" : ""}>${esc(l)}${n ? ` · ${n} ekar` : ""}</option>`;
+    }).join("");
     let h = `<div class="kat"><div class="row" style="justify-content:space-between"><h2>Pa ajan · ${esc(RUB_L[r])}</h2>
-      <label class="noprint">Rubrik<select id="rubSel">${opt}</select></label></div><div class="wrap"><table>${antet("Ajan")}`;
+      <div class="row noprint" style="gap:10px"><label>Ajan<select id="ekSel">
+        <option value="0" ${st.sekEkar ? "" : "selected"}>Tout ajan (${tout.length})</option>
+        <option value="1" ${st.sekEkar ? "selected" : ""}>Sèlman ajan ki gen ekar (${nEk})</option></select></label>
+      <label>Rubrik<select id="rubSel">${opt}</select></label></div></div><div class="wrap"><table>${antet("Ajan")}`;
     const tot = sòm([]);
     for (const k of ks) {
       const c = T[k]; for (const z in tot) tot[z] += c[z];
       h += liy(esc(k) + chipsAjan(K, k, r, c), c, r, `class="klik" data-k="${esc(k)}"`);
     }
-    h += liy("TOTAL", tot, r, 'class="tot"');
+    if (!ks.length) h += `<tr><td colspan="7" class="okc" style="text-align:center;padding:18px">✓ Okenn ajan pa gen ekar nan rubrik sa a</td></tr>`;
+    else h += liy(st.sekEkar ? "TOTAL (ajan ki gen ekar)" : "TOTAL", tot, r, 'class="tot"');
     h += `</table></div><div class="note">Klike sou yon ajan pou wè tout rubrik li yo jou pa jou, epi liy yo.</div></div>`;
     $("vi").innerHTML = h;
     $("rubSel").onchange = (e) => { st.rubAjan = e.target.value; rann(); sove(); };
+    $("ekSel").onchange = (e) => { st.sekEkar = e.target.value === "1"; rann(); sove(); };
     $("vi").querySelectorAll("[data-k]").forEach((tr) => (tr.onclick = () => ouvriAjan(tr.dataset.k)));
   }
   function vJou(K) {
