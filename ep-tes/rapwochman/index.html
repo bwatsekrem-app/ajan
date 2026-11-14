@@ -232,7 +232,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   ];
   const RUB_L = Object.fromEntries(RUB);
   // Rubrik Supabase konnen (lòt yo pa sou app la : nou pa konpare yo ak Supabase)
-  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais_auto", "frais", "virement", "solde"]);
+  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais_auto", "frais", "virement", "monnaie", "remise", "solde"]);
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
