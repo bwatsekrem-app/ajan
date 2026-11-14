@@ -101,6 +101,7 @@ th.imp{color:var(--ok)}
 tr.tot td{font-weight:700;border-top:2px solid var(--li);background:var(--th)!important}
 tr.klik{cursor:pointer}tr.klik:hover td{background:var(--pri-t)!important}
 td.ekar{color:var(--er);font-weight:700}
+tr.poko td{background:var(--avb)}tr.poko td:first-child{box-shadow:inset 3px 0 0 var(--av)}
 td.avc{color:var(--av, #b45309);font-weight:700;white-space:nowrap}
 td.ekar::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--er);margin-right:7px;vertical-align:middle}
 td.okc{color:var(--ok);font-weight:600}
@@ -796,16 +797,23 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
     let h = `<div class="note">${tx.length} tranzaksyon valide · <b>${poko.length} poko nan Airtable</b> · ${tx.length - poko.length} deja ladan l${SY.sb.an_atant ? ` · ${SY.sb.an_atant} depo poko valide pa Kès (yo p ap ale toutotan yo pa valide)` : ""}</div>`;
     const bazManke = [...new Set(poko.map((t) => t.mwa))].filter((m) => !(SY.sb.baz || {})[m]);
     if (bazManke.length) h += `<div class="err">Baz Airtable mwa ${bazManke.join(", ")} poko egziste nan Airtable (non « Transactions | Dec 2026 » pa egzanp). Depi ekip data a kreye l, zouti a ap jwenn li pou kont li.</div>`;
-    if (tx.length) {
-      h += `<div class="wrap"><table><tr><th><input type="checkbox" id="syTout" ${poko.length ? "" : "disabled"}></th><th>Dat</th><th>Kont</th><th>Kliyan</th><th>Kolòn Airtable</th><th>Montan</th><th>Solde</th><th>Kolektè</th><th>Estati</th></tr>`;
-      for (const t of tx) {
+    // Filt : sèlman sa ki poko nan Airtable (pa defo lè gen), oswa tout
+    const fA = SY.fA || (poko.length ? "poko" : "tout");
+    if (tx.length) h += `<div class="row noprint" style="gap:8px;margin:8px 0">${[["poko", `Poko sinkronize (${poko.length})`], ["deja", `Deja nan Airtable (${tx.length - poko.length})`], ["tout", `Tout (${tx.length})`]]
+      .map(([k, l]) => `<button class="${k === fA ? "pri" : ""}" data-fa="${k}">${l}</button>`).join("")}</div>`;
+    const lis = (fA === "poko" ? poko : fA === "deja" ? tx.filter((t) => t.rec || t.v8) : [...poko, ...tx.filter((t) => t.rec || t.v8)]);
+    if (tx.length && !lis.length) h += `<div class="note okc">${fA === "poko" ? "✓ Tout tranzaksyon valide yo deja nan Airtable." : "Anyen."}</div>`;
+    if (lis.length) {
+      h += `<div class="wrap"><table><tr><th><input type="checkbox" id="syTout" ${lis.some((t) => !t.rec && !t.v8) ? "" : "disabled"}></th><th>Dat</th><th>Kont</th><th>Kliyan</th><th>Kolòn Airtable</th><th>Montan</th><th>Solde</th><th>Kolektè</th><th>Estati</th></tr>`;
+      for (const t of lis) {
         const st = t.rec ? '<span class="chip ok">nan Airtable</span>' : t.v8 ? '<span class="chip ok">voye pa v8</span>' : '<span class="chip av">poko</span>';
-        h += `<tr><td>${!t.rec && !t.v8 ? `<input type="checkbox" class="syC" value="${t.id}">` : ""}</td><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(t.kliyan)}</td>
+        h += `<tr${!t.rec && !t.v8 ? ' class="poko"' : ""}><td>${!t.rec && !t.v8 ? `<input type="checkbox" class="syC" value="${t.id}">` : ""}</td><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(t.kliyan)}</td>
           <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${nf(t.solde)}</td><td style="text-align:left">${t.kolekte ? esc(t.kolekte) : '<span class="chip av" title="Itilizatè Supabase sa a pa konekte ak yon non kolektè Airtable : liy lan ap ale san kolektè. Konekte l nan onglè « Ajan Airtable ↔ Supabase ».">san kolektè</span>'}</td><td>${st}</td></tr>`;
       }
       h += `</table></div>`;
     }
     $("syA").innerHTML = h;
+    $("syA").querySelectorAll("[data-fa]").forEach((b) => (b.onclick = () => { SY.fA = b.dataset.fa; rannSb(); }));
     const maj = () => { const n = $("syA").querySelectorAll(".syC:checked").length; $("syVoye").disabled = !n; $("syVoye").textContent = n ? `Voye ${n} nan Airtable` : "Voye sa ki chwazi yo"; };
     $("syA").querySelectorAll(".syC").forEach((c) => (c.onchange = maj));
     if ($("syTout")) $("syTout").onchange = (e) => { $("syA").querySelectorAll(".syC").forEach((c) => (c.checked = e.target.checked)); maj(); };
