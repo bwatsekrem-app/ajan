@@ -224,7 +224,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   // Rubrik yo, nan lòd finans
   const RUB = [
     ["depot", "Depo"], ["retrait", "Retrè"], ["grandon", "Grandon (net)"], ["inscription", "Inscription"],
-    ["renouvellement", "Renouvellement"], ["nouveau_carnet", "Nouveau Carnet"], ["frais_service", "Frè sèvis (Nouveau Frais + Frais Auto)"],
+    ["renouvellement", "Renouvellement"], ["nouveau_carnet", "Nouveau Carnet (kanè pèdi)"], ["frais_service", "Nouveau Frais (frè sèvis prepeye)"], ["frais_auto", "Frais Auto (ansyen kont)"],
     ["frais", "Lòt frè"], ["virement", "Virement"], ["retour", "Retour"], ["credit", "Kredi"], ["konfyans", "Kredi Konfyans"],
     ["electromenager", "Kredi Electromenager"], ["debloke", "Kredi Debloke"], ["fdk", "FDK-Konfyans"],
     ["fonds_garantie", "Fonds Garantie"], ["monnaie", "Monnaie"], ["remise", "Remise"], ["dossier", "Dossier"], ["penalites", "Penalites"],
@@ -232,7 +232,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   ];
   const RUB_L = Object.fromEntries(RUB);
   // Rubrik Supabase konnen (lòt yo pa sou app la : nou pa konpare yo ak Supabase)
-  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais", "virement", "solde"]);
+  const RUB_SB = new Set(["depot", "retrait", "grandon", "inscription", "nouveau_carnet", "frais_service", "frais_auto", "frais", "virement", "solde"]);
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
