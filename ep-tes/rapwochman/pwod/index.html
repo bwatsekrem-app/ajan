@@ -793,8 +793,9 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
   }
   function rannSb() {
     const tx = SY.sb.tx || [], poko = tx.filter((t) => !t.rec && !t.v8);
-    const kol = (t) => t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
-    let h = `<div class="note">${tx.length} tranzaksyon valide · <b>${poko.length} poko nan Airtable</b> · ${tx.length - poko.length} deja ladan l${SY.sb.an_atant ? ` · ${SY.sb.an_atant} depo poko valide pa Kès (yo p ap ale toutotan yo pa valide)` : ""}</div>`;
+    const kol = (t) => t.kr ? (t.tip === "KP" ? "Penalites (kredi)" : "Credit") : t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
+    let h = `<div class="note">${tx.length} tranzaksyon valide · <b>${poko.length} poko nan Airtable</b> · ${tx.length - poko.length} deja ladan l${SY.sb.an_atant ? ` · ${SY.sb.an_atant} depo poko valide pa Kès (yo p ap ale toutotan yo pa valide)` : ""}${SY.sb.an_atant_kr ? ` · ${SY.sb.an_atant_kr} peman kredi poko valide` : ""}</div>`
+      + `<div class="note">Kredi : peman ak penalite kredi klasik (kont A-SC) ale nan kolòn « Credit » / « Penalites » ak « Versement Declare ».${SY.sb.kr_san_kod ? ` <span class="chip av">${SY.sb.kr_san_kod} peman kredi san kòd A-SC</span> (kont kredi a poko gen kòd Airtable : yo pa ka ale).` : ""}</div>`;
     const bazManke = [...new Set(poko.map((t) => t.mwa))].filter((m) => !(SY.sb.baz || {})[m]);
     if (bazManke.length) h += `<div class="err">Baz Airtable mwa ${bazManke.join(", ")} poko egziste nan Airtable (non « Transactions | Dec 2026 » pa egzanp). Depi ekip data a kreye l, zouti a ap jwenn li pou kont li.</div>`;
     // Filt : sèlman sa ki poko nan Airtable (pa defo lè gen), oswa tout
@@ -808,7 +809,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
       for (const t of lis) {
         const st = t.rec ? '<span class="chip ok">nan Airtable</span>' : t.v8 ? '<span class="chip ok">voye pa v8</span>' : '<span class="chip av">poko</span>';
         h += `<tr${!t.rec && !t.v8 ? ' class="poko"' : ""}><td>${!t.rec && !t.v8 ? `<input type="checkbox" class="syC" value="${t.id}">` : ""}</td><td>${fd(t.date)}</td><td>${esc(t.kod)}</td><td style="text-align:left">${esc(t.kliyan)}</td>
-          <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${nf(t.solde)}</td><td style="text-align:left">${t.kolekte ? esc(t.kolekte) : '<span class="chip av" title="Itilizatè Supabase sa a pa konekte ak yon non kolektè Airtable : liy lan ap ale san kolektè. Konekte l nan onglè « Ajan Airtable ↔ Supabase ».">san kolektè</span>'}</td><td>${st}</td></tr>`;
+          <td style="text-align:left">${esc(kol(t))}</td><td>${nf(t.montant)}</td><td>${t.kr ? (t.vesman != null ? `<span class="mut">vèsman</span> ${nf(t.vesman)}` : "—") : nf(t.solde)}</td><td style="text-align:left">${t.kolekte ? esc(t.kolekte) : '<span class="chip av" title="Itilizatè Supabase sa a pa konekte ak yon non kolektè Airtable : liy lan ap ale san kolektè. Konekte l nan onglè « Ajan Airtable ↔ Supabase ».">san kolektè</span>'}</td><td>${st}</td></tr>`;
       }
       h += `</table></div>`;
     }
@@ -823,7 +824,7 @@ dialog .ko{padding:16px 18px;max-height:75vh;overflow:auto}
     const ids = [...$("syA").querySelectorAll(".syC:checked")].map((c) => c.value);
     if (!ids.length) return;
     const chwa = (SY.sb.tx || []).filter((t) => ids.includes(t.id));
-    const kol = (t) => t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
+    const kol = (t) => t.kr ? (t.tip === "KP" ? "Penalites (kredi)" : "Credit") : t.gr ? "Grandon" : t.tip === "FL" ? (t.fre === "Frais service" ? (t.regim === "nouveau" ? "Frais Nouveau" : "Frais Auto") : t.fre) : TIP_L[t.tip] || t.tip;
     const r0 = await modal({ tit: `Voye ${ids.length} tranzaksyon nan Airtable ?`, kalite: "av", ok: `Wi, voye ${ids.length}`,
       mesaj: `Sa ap kreye <b>${ids.length} liy</b> nan baz ofisyèl ${[...new Set(chwa.map((t) => "«Transactions " + ["", "Janv", "Fev", "Mars", "Avril", "Mai", "Juin", "Juil", "Aout", "Sept", "Oct", "Nov", "Dec"][+t.mwa.slice(5)] + " " + t.mwa.slice(0, 4) + "»"))].join(", ")} (Source = Supabase).
         Si ekip data a te deja antre youn ladan yo, sistèm nan ap konekte l olye l kreye yon lòt.
